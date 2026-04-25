@@ -52,4 +52,5 @@ the product target because it cannot cover all system traffic.
 - `docs/statements.md`: initial product and platform statements.
 - `docs/stack.md`: fixed implementation stack.
 - `docs/architecture.md`: first-pass architecture and stack notes.
+- `docs/development-plan.md`: next development sequence and quality gates.
 - `docs/roadmap.md`: phased delivery plan.

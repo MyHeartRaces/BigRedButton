@@ -7,6 +7,7 @@ Date: 2026-04-25
 - create the local repository
 - record initial product statements
 - fix the first implementation stack
+- record the development plan and quality gates
 - define the V7 profile schema consumed by the launcher
 - scaffold the Go module and Wails v2 UI shell
 - add a headless `tracegate-launcherctl` path before relying on the UI
