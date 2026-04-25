@@ -6,8 +6,10 @@ Date: 2026-04-25
 
 - create the local repository
 - record initial product statements
-- choose the first implementation stack
+- fix the first implementation stack
 - define the V7 profile schema consumed by the launcher
+- scaffold the Go module and Wails v2 UI shell
+- add a headless `tracegate-launcherctl` path before relying on the UI
 
 ## Phase 1: Linux MVP
 
@@ -23,6 +25,7 @@ Scope:
 - add route exclusion for WSTunnel endpoint
 - expose simple status to the UI
 - cleanly disconnect and restore network state
+- run the same lifecycle through `tracegate-launcherctl` for repeatable tests
 
 Exit criteria:
 
@@ -72,4 +75,3 @@ Scope:
 - split tunneling UI
 - automatic updates
 - iOS and Android
-

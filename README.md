@@ -17,6 +17,16 @@ repository yet.
   requires platform-specific validation.
 - Keep iOS and Android out of scope until the desktop client is stable.
 
+## Fixed Stack
+
+- Go for the operational core, privileged helper and platform networking
+  adapters.
+- Wails v2 for the desktop shell.
+- TypeScript + Svelte for the small one-button UI.
+- Bundled upstream `wstunnel` binaries per target platform.
+- Native platform adapters only where Go cannot own the integration cleanly.
+  C++ is allowed for narrow shims, not as the default application runtime.
+
 ## First MVP
 
 The first MVP is intentionally narrow:
@@ -40,6 +50,6 @@ the product target because it cannot cover all system traffic.
 ## Repository Layout
 
 - `docs/statements.md`: initial product and platform statements.
+- `docs/stack.md`: fixed implementation stack.
 - `docs/architecture.md`: first-pass architecture and stack notes.
 - `docs/roadmap.md`: phased delivery plan.
-
