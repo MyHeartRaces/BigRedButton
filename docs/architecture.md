@@ -2,6 +2,10 @@
 
 Date: 2026-04-25
 
+Detailed implementation architecture is recorded in
+[`application-architecture.md`](application-architecture.md). This file keeps
+the short architectural summary.
+
 ## Preferred Shape
 
 Tracegate Launcher should be split into a small UI and a privileged networking
