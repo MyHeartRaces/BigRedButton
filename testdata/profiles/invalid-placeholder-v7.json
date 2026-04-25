@@ -1,0 +1,22 @@
+{
+  "protocol": "wireguard",
+  "transport": "wstunnel",
+  "server": "edge.example.com",
+  "port": 443,
+  "profile": "V7-WireGuard-WSTunnel-Direct",
+  "wstunnel": {
+    "mode": "wireguard-over-websocket",
+    "url": "wss://edge.example.com:443/cdn/ws",
+    "path": "/cdn/ws",
+    "local_udp_listen": "127.0.0.1:51820"
+  },
+  "wireguard": {
+    "private_key": "REPLACE_CLIENT_WIREGUARD_PRIVATE_KEY",
+    "server_public_key": "REPLACE_WIREGUARD_SERVER_PUBLIC_KEY",
+    "address": "10.70.0.2/32",
+    "allowed_ips": ["0.0.0.0/0"],
+    "mtu": 1280,
+    "persistent_keepalive": 25
+  }
+}
+

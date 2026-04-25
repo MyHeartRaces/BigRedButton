@@ -20,6 +20,5 @@ node_modules/
 *.conf.dpapi
 *.key
 *.pem
-profiles/
-runtime/
-
+/profiles/
+/runtime/

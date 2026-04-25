@@ -47,6 +47,23 @@ The first MVP is intentionally narrow:
 Proxy-only mode can exist later as a diagnostic or fallback mode, but it is not
 the product target because it cannot cover all system traffic.
 
+## Current Implementation
+
+The first code slice is intentionally headless:
+
+```bash
+go test ./...
+go run ./cmd/tracegate-launcherctl validate-profile testdata/profiles/valid-v7.json
+```
+
+Implemented so far:
+
+- Go module
+- V7 profile parser and validator
+- secret-redacted profile summary
+- `tracegate-launcherctl validate-profile`
+- redacted valid and invalid fixtures
+
 ## Repository Layout
 
 - `docs/statements.md`: initial product and platform statements.
