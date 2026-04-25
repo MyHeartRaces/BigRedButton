@@ -1,0 +1,45 @@
+# Tracegate Launcher
+
+Tracegate Launcher is the planned desktop client for Tracegate V7:
+WireGuard over WSTunnel.
+
+Status: bootstrap notes only. No production client code exists in this
+repository yet.
+
+## Current Product Decision
+
+- Build the first working client on Linux.
+- Do not port before the Linux client can reliably connect, disconnect and
+  recover from ordinary failures.
+- After Linux is working, port to Windows and give that build to testers.
+- Treat macOS as the next desktop port after Windows validation. The UI and
+  core model should port cleanly, but the privileged networking layer still
+  requires platform-specific validation.
+- Keep iOS and Android out of scope until the desktop client is stable.
+
+## First MVP
+
+The first MVP is intentionally narrow:
+
+- one profile
+- one Connect / Disconnect control
+- system-wide tunnel as the target behavior
+- WireGuard over local WSTunnel
+- route exclusion for the WSTunnel server endpoint
+- minimal status reporting
+- no multi-profile UI
+- no account management
+- no advanced logs UI
+- no kill switch
+- no split tunneling UI
+- no mobile port
+
+Proxy-only mode can exist later as a diagnostic or fallback mode, but it is not
+the product target because it cannot cover all system traffic.
+
+## Repository Layout
+
+- `docs/statements.md`: initial product and platform statements.
+- `docs/architecture.md`: first-pass architecture and stack notes.
+- `docs/roadmap.md`: phased delivery plan.
+

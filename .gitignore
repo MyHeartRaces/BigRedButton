@@ -1,0 +1,25 @@
+# Build output
+target/
+dist/
+build/
+out/
+
+# Node / frontend
+node_modules/
+.turbo/
+.vite/
+
+# Local editor and OS files
+.DS_Store
+.idea/
+.vscode/
+
+# Runtime state and secrets
+*.log
+*.conf
+*.conf.dpapi
+*.key
+*.pem
+profiles/
+runtime/
+
