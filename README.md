@@ -83,6 +83,7 @@ Implemented so far:
 - WSTunnel process runner/executor abstraction with rollback tests
 - WireGuard `wg setconf` renderer and Linux command builders
 - Linux WireGuard executor with temporary secret config cleanup
+- composite Linux lifecycle executor for route, WSTunnel and WireGuard steps
 - redacted valid and invalid fixtures
 
 ## Repository Layout
