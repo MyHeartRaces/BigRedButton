@@ -68,6 +68,8 @@ Implemented so far:
 - `tracegate-launcherctl plan-disconnect`
 - secret-free dry-run connect/disconnect plans
 - lifecycle engine with fake-executor rollback tests
+- platform-neutral route exclusion model
+- Linux `ip route get` output parser for future helper integration
 - redacted valid and invalid fixtures
 
 ## Repository Layout

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tracegate/tracegate-launcher/internal/profile"
+	"github.com/tracegate/tracegate-launcher/internal/routes"
 )
 
 const (
@@ -24,16 +25,17 @@ type Options struct {
 }
 
 type Plan struct {
-	Kind               string   `json:"kind"`
-	Profile            string   `json:"profile,omitempty"`
-	ProfileFingerprint string   `json:"profile_fingerprint,omitempty"`
-	WSTunnelHost       string   `json:"wstunnel_host,omitempty"`
-	WSTunnelURL        string   `json:"wstunnel_url,omitempty"`
-	EndpointIPs        []string `json:"endpoint_ips,omitempty"`
-	WireGuardInterface string   `json:"wireguard_interface,omitempty"`
-	RuntimeRoot        string   `json:"runtime_root,omitempty"`
-	Warnings           []string `json:"warnings,omitempty"`
-	Steps              []Step   `json:"steps"`
+	Kind               string                     `json:"kind"`
+	Profile            string                     `json:"profile,omitempty"`
+	ProfileFingerprint string                     `json:"profile_fingerprint,omitempty"`
+	WSTunnelHost       string                     `json:"wstunnel_host,omitempty"`
+	WSTunnelURL        string                     `json:"wstunnel_url,omitempty"`
+	EndpointIPs        []string                   `json:"endpoint_ips,omitempty"`
+	WireGuardInterface string                     `json:"wireguard_interface,omitempty"`
+	RuntimeRoot        string                     `json:"runtime_root,omitempty"`
+	Warnings           []string                   `json:"warnings,omitempty"`
+	Steps              []Step                     `json:"steps"`
+	RouteExclusions    []routes.EndpointExclusion `json:"route_exclusions,omitempty"`
 }
 
 type Step struct {
@@ -52,6 +54,7 @@ func Connect(config profile.Config, options Options) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
+	var routeExclusions []routes.EndpointExclusion
 
 	steps := []Step{
 		{
@@ -95,6 +98,16 @@ func Connect(config profile.Config, options Options) (Plan, error) {
 			}
 			if normalized.DefaultInterface != "" {
 				details = append(details, "interface="+normalized.DefaultInterface)
+			}
+			if normalized.DefaultGateway != "" || normalized.DefaultInterface != "" {
+				exclusion, err := routes.NewEndpointExclusion(endpointIP, normalized.DefaultGateway, normalized.DefaultInterface)
+				if err != nil {
+					return Plan{}, err
+				}
+				routeExclusions = append(routeExclusions, exclusion)
+				details = append(details, "destination="+exclusion.Destination)
+			} else {
+				warnings = append(warnings, "default route gateway/interface were not provided; route exclusion remains abstract until apply time")
 			}
 			steps = append(steps, Step{
 				ID:                 "snapshot-route-" + safeID(endpointIP),
@@ -204,6 +217,7 @@ func Connect(config profile.Config, options Options) (Plan, error) {
 		RuntimeRoot:        normalized.RuntimeRoot,
 		Warnings:           warnings,
 		Steps:              steps,
+		RouteExclusions:    routeExclusions,
 	}, nil
 }
 

@@ -31,6 +31,12 @@ func TestConnectPlanWithEndpointIPs(t *testing.T) {
 	if len(plan.EndpointIPs) != 2 {
 		t.Fatalf("unexpected endpoint IPs: %#v", plan.EndpointIPs)
 	}
+	if len(plan.RouteExclusions) != 2 {
+		t.Fatalf("unexpected route exclusions: %#v", plan.RouteExclusions)
+	}
+	if plan.RouteExclusions[0].Destination != "203.0.113.10/32" {
+		t.Fatalf("unexpected route exclusion destination: %#v", plan.RouteExclusions[0])
+	}
 	if !hasStep(plan, "add-route-exclusion-203-0-113-10") {
 		t.Fatalf("missing route exclusion step: %#v", plan.Steps)
 	}
