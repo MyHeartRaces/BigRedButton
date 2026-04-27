@@ -56,6 +56,7 @@ go test ./...
 go run ./cmd/tracegate-launcherctl validate-profile testdata/profiles/valid-v7.json
 go run ./cmd/tracegate-launcherctl plan-connect -endpoint-ip 203.0.113.10 testdata/profiles/valid-v7.json
 go run ./cmd/tracegate-launcherctl plan-disconnect
+go run ./cmd/tracegate-launcherctl status
 go run ./cmd/tracegate-launcherctl linux-dry-run-connect -endpoint-ip 203.0.113.10 -default-gateway 192.0.2.1 -default-interface eth0 testdata/profiles/valid-v7.json
 go run ./cmd/tracegate-launcherctl linux-dry-run-disconnect -runtime-root /run/tracegate-launcher
 # Linux only, changes system networking/process state:
@@ -90,6 +91,7 @@ Implemented so far:
 - runtime state metadata for WSTunnel process and WireGuard AllowedIPs
 - lifecycle disconnect path can stop stored WSTunnel PID and clean saved routes
 - guarded Linux connect/disconnect CLI entrypoints for the lifecycle executor
+- runtime status snapshots and `tracegate-launcherctl status`
 - redacted valid and invalid fixtures
 
 ## Repository Layout

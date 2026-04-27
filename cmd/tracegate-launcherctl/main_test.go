@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
 )
 
 func TestValidateProfileCommand(t *testing.T) {
@@ -115,6 +118,41 @@ func TestPlanDisconnectCommand(t *testing.T) {
 	}
 	if !strings.Contains(out, "Remove launcher-owned WSTunnel endpoint route exclusions") {
 		t.Fatalf("expected route cleanup step, got: %s", out)
+	}
+}
+
+func TestStatusCommandIdle(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{"status", "-runtime-root", t.TempDir()}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "state: Idle") {
+		t.Fatalf("expected idle status, got: %s", stdout.String())
+	}
+}
+
+func TestStatusCommandConnected(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	store := truntime.Store{Root: runtimeRoot}
+	err := store.Save(context.Background(), truntime.State{
+		Version:            truntime.StateVersion,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "tg-test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{"status", "-runtime-root", runtimeRoot}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "state: Connected") || !strings.Contains(out, "profile fingerprint: abc123") {
+		t.Fatalf("expected connected status, got: %s", out)
 	}
 }
 

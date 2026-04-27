@@ -13,6 +13,8 @@ import (
 	"github.com/tracegate/tracegate-launcher/internal/planner"
 	platformlinux "github.com/tracegate/tracegate-launcher/internal/platform/linux"
 	"github.com/tracegate/tracegate-launcher/internal/profile"
+	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
+	"github.com/tracegate/tracegate-launcher/internal/status"
 	"github.com/tracegate/tracegate-launcher/internal/supervisor"
 )
 
@@ -35,6 +37,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return planConnect(args[1:], stdout, stderr)
 	case "plan-disconnect":
 		return planDisconnect(args[1:], stdout, stderr)
+	case "status":
+		return printStatus(args[1:], stdout, stderr)
 	case "linux-dry-run-connect":
 		return linuxDryRunConnect(args[1:], stdout, stderr)
 	case "linux-dry-run-disconnect":
@@ -140,6 +144,40 @@ func planConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	printPlan(plan, *jsonOutput, stdout)
+	return 0
+}
+
+func printStatus(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("status", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	runtimeRoot := fs.String("runtime-root", planner.DefaultRuntimeRoot, "launcher runtime state root")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: tracegate-launcherctl status [-json] [-runtime-root path]")
+		return 2
+	}
+
+	snapshot := status.FromStore(context.Background(), truntime.Store{Root: *runtimeRoot})
+	if *jsonOutput {
+		writeJSON(stdout, snapshot)
+		return 0
+	}
+	fmt.Fprintf(stdout, "state: %s\n", snapshot.State)
+	fmt.Fprintf(stdout, "runtime root: %s\n", snapshot.RuntimeRoot)
+	if snapshot.Active != nil {
+		fmt.Fprintf(stdout, "profile fingerprint: %s\n", snapshot.Active.ProfileFingerprint)
+		fmt.Fprintf(stdout, "wireguard interface: %s\n", snapshot.Active.WireGuardInterface)
+		if snapshot.Active.WSTunnelProcess != nil {
+			fmt.Fprintf(stdout, "wstunnel pid: %d\n", snapshot.Active.WSTunnelProcess.PID)
+		}
+	}
+	if snapshot.Error != "" {
+		fmt.Fprintf(stdout, "error: %s\n", snapshot.Error)
+		return 1
+	}
 	return 0
 }
 
@@ -602,6 +640,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  validate-profile [-json] <profile.json>")
 	fmt.Fprintln(w, "  plan-connect [-json] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  plan-disconnect [-json]")
+	fmt.Fprintln(w, "  status [-json] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")
