@@ -78,6 +78,7 @@ Implemented so far:
   with optional read-only route discovery
 - secret-free runtime state model and file store for future disconnect/rollback
 - Linux dry-run disconnect can read runtime state and plan saved route cleanup
+- real Linux route executor for endpoint exclusions, covered by fake-runner tests
 - redacted valid and invalid fixtures
 
 ## Repository Layout
