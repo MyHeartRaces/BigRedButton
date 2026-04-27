@@ -71,6 +71,7 @@ Implemented so far:
 - platform-neutral route exclusion model
 - Linux `ip route get` output parser for future helper integration
 - Linux `ip route` command builders for route exclusion apply/rollback
+- Linux read-only endpoint route discovery through an injectable command runner
 - redacted valid and invalid fixtures
 
 ## Repository Layout
