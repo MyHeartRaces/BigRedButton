@@ -54,6 +54,8 @@ The first code slice is intentionally headless:
 ```bash
 go test ./...
 go run ./cmd/tracegate-launcherctl validate-profile testdata/profiles/valid-v7.json
+go run ./cmd/tracegate-launcherctl plan-connect -endpoint-ip 203.0.113.10 testdata/profiles/valid-v7.json
+go run ./cmd/tracegate-launcherctl plan-disconnect
 ```
 
 Implemented so far:
@@ -62,6 +64,9 @@ Implemented so far:
 - V7 profile parser and validator
 - secret-redacted profile summary
 - `tracegate-launcherctl validate-profile`
+- `tracegate-launcherctl plan-connect`
+- `tracegate-launcherctl plan-disconnect`
+- secret-free dry-run connect/disconnect plans
 - redacted valid and invalid fixtures
 
 ## Repository Layout

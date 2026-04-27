@@ -25,6 +25,7 @@ type Config struct {
 	Server              string   `json:"server"`
 	Port                int      `json:"port"`
 	SNI                 string   `json:"sni,omitempty"`
+	WSTunnelHost        string   `json:"wstunnel_host"`
 	WSTunnelURL         string   `json:"wstunnel_url"`
 	WSTunnelPath        string   `json:"wstunnel_path"`
 	WSTunnelTLSName     string   `json:"wstunnel_tls_server_name,omitempty"`
@@ -44,6 +45,7 @@ type Summary struct {
 	Profile             string   `json:"profile"`
 	Server              string   `json:"server"`
 	Port                int      `json:"port"`
+	WSTunnelHost        string   `json:"wstunnel_host"`
 	WSTunnelURL         string   `json:"wstunnel_url"`
 	WSTunnelPath        string   `json:"wstunnel_path"`
 	LocalUDPListen      string   `json:"local_udp_listen"`
@@ -96,6 +98,7 @@ func (c Config) Summary() Summary {
 		Profile:             c.Name,
 		Server:              c.Server,
 		Port:                c.Port,
+		WSTunnelHost:        c.WSTunnelHost,
 		WSTunnelURL:         c.WSTunnelURL,
 		WSTunnelPath:        c.WSTunnelPath,
 		LocalUDPListen:      c.LocalUDPListen,
@@ -292,6 +295,7 @@ func normalize(raw rawConfig) (Config, error) {
 		Server:              server,
 		Port:                port,
 		SNI:                 strings.TrimSpace(raw.SNI),
+		WSTunnelHost:        wstunnelHost,
 		WSTunnelURL:         wstunnelURL,
 		WSTunnelPath:        rawPath,
 		WSTunnelTLSName:     strings.TrimSpace(raw.WSTunnel.TLSServerName),

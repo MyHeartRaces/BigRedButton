@@ -24,6 +24,9 @@ func TestParseV7ValidFixture(t *testing.T) {
 	if config.WSTunnelURL != "wss://edge.example.com:443/cdn/ws" {
 		t.Fatalf("unexpected wstunnel URL: %s", config.WSTunnelURL)
 	}
+	if config.WSTunnelHost != "edge.example.com" {
+		t.Fatalf("unexpected wstunnel host: %s", config.WSTunnelHost)
+	}
 	if config.LocalUDPListen != "127.0.0.1:51820" {
 		t.Fatalf("unexpected local UDP endpoint: %s", config.LocalUDPListen)
 	}
