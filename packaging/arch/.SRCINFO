@@ -1,6 +1,6 @@
 pkgbase = big-red-button
-	pkgdesc = Desktop launcher for WireGuard over WSTunnel
-	pkgver = 0.2.0
+	pkgdesc = Desktop VPN launcher
+	pkgver = 0.2.1
 	pkgrel = 1
 	url = https://github.com/MyHeartRaces/BigRedButton
 	arch = x86_64
@@ -13,7 +13,7 @@ pkgbase = big-red-button
 	depends = wireguard-tools
 	depends = xdg-utils
 	optdepends = wstunnel: WSTunnel client binary required for real connections
-	source = big-red-button-0.2.0.tar.gz
+	source = big-red-button-0.2.1.tar.gz
 	sha256sums = SKIP
 
 pkgname = big-red-button

@@ -128,7 +128,7 @@ func TestWSTunnelClientCommandRejectsInvalidInput(t *testing.T) {
 
 func loadProfile(t *testing.T) profile.Config {
 	t.Helper()
-	config, err := profile.LoadFile("../../testdata/profiles/valid-v7.json")
+	config, err := profile.LoadFile("../../testdata/profiles/valid-wgws.json")
 	if err != nil {
 		t.Fatal(err)
 	}

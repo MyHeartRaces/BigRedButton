@@ -4,27 +4,27 @@
 
 # Big Red Button
 
-Big Red Button is a desktop launcher and CLI for a single V7 profile:
-WireGuard over WSTunnel.
+Big Red Button is a desktop VPN launcher and CLI for a single local profile.
 
 The current build is intended for early Linux testing. It provides a CLI,
-desktop GUI, runtime state, Linux route handling, WSTunnel process supervision,
-and WireGuard setup/rollback primitives.
+desktop GUI, runtime state, Linux route handling, tunnel helper supervision,
+and WireGuard setup/rollback primitives. The first supported transport path is
+WGWS.
 
 ## Status
 
 Alpha. The guarded Linux lifecycle commands can change system routes, create
-WireGuard interfaces, start WSTunnel, and clean up runtime state. Test in a VM
-or disposable Arch Linux environment first.
+WireGuard interfaces, start the tunnel helper, and clean up runtime state. Test
+in a VM or disposable Arch Linux environment first.
 
 Implemented:
 
-- V7 profile parser and validator
+- local VPN profile parser and validator
 - secret-redacted profile summary
 - connect/disconnect planner
 - runtime status snapshots
-- Linux endpoint route exclusions
-- WSTunnel command builder and process executor
+- Linux route exclusions for the tunnel gateway
+- tunnel helper command builder and process executor
 - WireGuard `wg setconf` renderer and Linux executor
 - composite Linux lifecycle executor with rollback tests
 - guarded Linux connect/disconnect CLI commands
@@ -54,9 +54,9 @@ Runtime on Linux:
 - `wstunnel` in `PATH`, or pass `-wstunnel-binary /path/to/wstunnel`
 - root privileges or equivalent capabilities for real connect/disconnect
 
-On Arch Linux, `iproute2` and `wireguard-tools` are official packages. WSTunnel
-may need to be installed separately if it is not available in your configured
-repositories.
+On Arch Linux, `iproute2` and `wireguard-tools` are official packages. The
+`wstunnel` helper may need to be installed separately if it is not available in
+your configured repositories.
 
 ## Build
 
@@ -73,8 +73,9 @@ The binaries are written to `build/big-red-button` and
 ## Desktop GUI
 
 `big-red-button-gui` starts a local desktop web UI and opens it in the default
-browser. It can save a V7 profile, show redacted profile details, show runtime
-status, and on Linux run guarded connect/disconnect commands through the CLI.
+browser. It can save a local VPN profile, show redacted profile details, show
+runtime status, and on Linux run guarded connect/disconnect commands through
+the CLI.
 
 On Linux the GUI uses `pkexec` when available, so desktop environments can show
 a graphical privilege prompt. On macOS and Windows the GUI starts normally, but
@@ -92,8 +93,8 @@ Release assets include Windows, macOS arm64, Arch Linux package, and
 example:
 
 ```bash
-git tag -a v0.2.0 -m "v0.2.0"
-git push origin v0.2.0
+git tag -a v0.2.1 -m "v0.2.1"
+git push origin v0.2.1
 ```
 
 ## GitHub Actions Builds
@@ -137,10 +138,10 @@ The PKGBUILD is in `packaging/arch/PKGBUILD`.
 ## Quick Smoke Test
 
 ```bash
-big-red-button validate-profile testdata/profiles/valid-v7.json
+big-red-button validate-profile testdata/profiles/valid-wgws.json
 big-red-button plan-connect \
   -endpoint-ip 203.0.113.10 \
-  testdata/profiles/valid-v7.json
+  testdata/profiles/valid-wgws.json
 big-red-button status
 ```
 
@@ -151,7 +152,7 @@ big-red-button linux-dry-run-connect \
   -endpoint-ip 203.0.113.10 \
   -default-gateway 192.0.2.1 \
   -default-interface eth0 \
-  testdata/profiles/valid-v7.json
+  testdata/profiles/valid-wgws.json
 ```
 
 ## Real Linux Connect
@@ -161,7 +162,7 @@ These commands change networking state. Run them only on the test machine.
 ```bash
 sudo big-red-button linux-connect \
   -yes \
-  -endpoint-ip <resolved-wstunnel-server-ip> \
+  -endpoint-ip <resolved-tunnel-gateway-ip> \
   -wstunnel-binary /usr/bin/wstunnel \
   /path/to/profile.json
 ```
@@ -182,8 +183,9 @@ By default, runtime state is stored in `/run/big-red-button/state.json`.
 
 ## Profile
 
-The expected profile is a normalized V7 WireGuard-over-WSTunnel JSON profile.
-See `testdata/profiles/valid-v7.json` for the current schema.
+The expected profile is a normalized JSON VPN profile for the currently
+supported WGWS adapter. See `testdata/profiles/valid-wgws.json` for the current
+schema.
 
 The planner and runtime status never print private keys. The WireGuard executor
 does write a temporary `wg setconf` file with private key material while

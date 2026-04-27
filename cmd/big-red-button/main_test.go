@@ -14,7 +14,7 @@ import (
 func TestValidateProfileCommand(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	code := run([]string{"validate-profile", "../../testdata/profiles/valid-v7.json"}, &stdout, &stderr)
+	code := run([]string{"validate-profile", "../../testdata/profiles/valid-wgws.json"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
 	}
@@ -30,7 +30,7 @@ func TestValidateProfileCommand(t *testing.T) {
 func TestValidateProfileCommandJSON(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	code := run([]string{"validate-profile", "-json", "../../testdata/profiles/valid-v7.json"}, &stdout, &stderr)
+	code := run([]string{"validate-profile", "-json", "../../testdata/profiles/valid-wgws.json"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
 	}
@@ -46,7 +46,7 @@ func TestValidateProfileCommandJSON(t *testing.T) {
 func TestValidateProfileCommandFailure(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	code := run([]string{"validate-profile", "../../testdata/profiles/invalid-placeholder-v7.json"}, &stdout, &stderr)
+	code := run([]string{"validate-profile", "../../testdata/profiles/invalid-placeholder-wgws.json"}, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
 	}
@@ -63,7 +63,7 @@ func TestPlanConnectCommand(t *testing.T) {
 		"-endpoint-ip", "203.0.113.10",
 		"-default-gateway", "192.0.2.1",
 		"-default-interface", "eth0",
-		"../../testdata/profiles/valid-v7.json",
+		"../../testdata/profiles/valid-wgws.json",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
@@ -91,7 +91,7 @@ func TestPlanConnectCommandJSON(t *testing.T) {
 		"plan-connect",
 		"-json",
 		"-endpoint-ip", "203.0.113.10",
-		"../../testdata/profiles/valid-v7.json",
+		"../../testdata/profiles/valid-wgws.json",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
@@ -164,7 +164,7 @@ func TestLinuxDryRunConnectCommand(t *testing.T) {
 		"-endpoint-ip", "203.0.113.10",
 		"-default-gateway", "192.0.2.1",
 		"-default-interface", "eth0",
-		"../../testdata/profiles/valid-v7.json",
+		"../../testdata/profiles/valid-wgws.json",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
@@ -188,7 +188,7 @@ func TestLinuxDryRunConnectCommandFailsWithoutConcreteRouteExclusion(t *testing.
 	code := run([]string{
 		"linux-dry-run-connect",
 		"-endpoint-ip", "203.0.113.10",
-		"../../testdata/profiles/valid-v7.json",
+		"../../testdata/profiles/valid-wgws.json",
 	}, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
@@ -213,7 +213,7 @@ func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
 		"-endpoint-ip", "203.0.113.10",
 		"-default-gateway", "192.0.2.1",
 		"-default-interface", "eth0",
-		"../../testdata/profiles/valid-v7.json",
+		"../../testdata/profiles/valid-wgws.json",
 	}, &connectStdout, &connectStderr)
 	if code != 0 {
 		t.Fatalf("connect code = %d stderr = %s", code, connectStderr.String())
@@ -257,7 +257,7 @@ func TestLinuxConnectRequiresConfirmation(t *testing.T) {
 	code := run([]string{
 		"linux-connect",
 		"-endpoint-ip", "203.0.113.10",
-		"../../testdata/profiles/valid-v7.json",
+		"../../testdata/profiles/valid-wgws.json",
 	}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
@@ -272,7 +272,7 @@ func TestLinuxDisconnectRequiresConfirmation(t *testing.T) {
 
 	code := run([]string{
 		"linux-disconnect",
-		"../../testdata/profiles/valid-v7.json",
+		"../../testdata/profiles/valid-wgws.json",
 	}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())

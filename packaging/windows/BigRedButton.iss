@@ -11,7 +11,7 @@
 #endif
 
 #ifndef AppVersion
-#define AppVersion "0.2.0"
+#define AppVersion "0.2.1"
 #endif
 
 [Setup]
@@ -27,6 +27,7 @@ DefaultGroupName=Big Red Button
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=BigRedButtonSetup-{#AppVersion}-windows-amd64
+SetupIconFile={#RepoDir}\packaging\assets\big-red-button.ico
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -34,16 +35,18 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 WizardStyle=modern
 UninstallDisplayName=Big Red Button
+UninstallDisplayIcon={app}\big-red-button.ico
 
 [Files]
 Source: "{#SourceDir}\big-red-button.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\big-red-button-gui.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoDir}\packaging\assets\big-red-button.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#RepoDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#RepoDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\Big Red Button"; Filename: "{app}\big-red-button-gui.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\Big Red Button"; Filename: "{app}\big-red-button-gui.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\Big Red Button"; Filename: "{app}\big-red-button-gui.exe"; WorkingDir: "{app}"; IconFilename: "{app}\big-red-button.ico"
+Name: "{autodesktop}\Big Red Button"; Filename: "{app}\big-red-button-gui.exe"; WorkingDir: "{app}"; IconFilename: "{app}\big-red-button.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked

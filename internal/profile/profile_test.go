@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseV7ValidFixture(t *testing.T) {
-	data, err := os.ReadFile("../../testdata/profiles/valid-v7.json")
+	data, err := os.ReadFile("../../testdata/profiles/valid-wgws.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestParseV7ValidFixture(t *testing.T) {
 }
 
 func TestSummaryDoesNotExposeSecrets(t *testing.T) {
-	data, err := os.ReadFile("../../testdata/profiles/valid-v7.json")
+	data, err := os.ReadFile("../../testdata/profiles/valid-wgws.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestSummaryDoesNotExposeSecrets(t *testing.T) {
 }
 
 func TestParseV7RejectsPlaceholders(t *testing.T) {
-	data, err := os.ReadFile("../../testdata/profiles/invalid-placeholder-v7.json")
+	data, err := os.ReadFile("../../testdata/profiles/invalid-placeholder-wgws.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestParseV7RejectsUnsafeMTUAndKeepalive(t *testing.T) {
 }
 
 func validProfileJSON() string {
-	data, err := os.ReadFile("../../testdata/profiles/valid-v7.json")
+	data, err := os.ReadFile("../../testdata/profiles/valid-wgws.json")
 	if err != nil {
 		panic(err)
 	}

@@ -152,7 +152,7 @@ func TestWireGuardExecutorRejectsUnsupportedStep(t *testing.T) {
 
 func wireGuardConfig(t *testing.T) wireguard.Config {
 	t.Helper()
-	config, err := profile.LoadFile("../../../testdata/profiles/valid-v7.json")
+	config, err := profile.LoadFile("../../../testdata/profiles/valid-wgws.json")
 	if err != nil {
 		t.Fatal(err)
 	}

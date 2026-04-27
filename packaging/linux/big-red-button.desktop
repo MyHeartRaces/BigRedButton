@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Big Red Button
-Comment=WireGuard over WSTunnel launcher
+Comment=VPN launcher
 Exec=big-red-button-gui
 Icon=big-red-button
 Terminal=false

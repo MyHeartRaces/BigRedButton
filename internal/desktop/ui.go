@@ -22,6 +22,7 @@ const indexHTML = `<!doctype html>
       --warn: #9a5b00;
       --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       --display: "Brush Script MT", "Brush Script", "Savoye LET", "Apple Chancery", cursive;
+      --block-display: "Phosphate", "Cooper Black", "Rockwell Extra Bold", Georgia, serif;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     @media (prefers-color-scheme: dark) {
@@ -61,26 +62,41 @@ const indexHTML = `<!doctype html>
     .brand {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 16px;
       min-width: 0;
     }
     .brand-mark {
-      width: 64px;
-      height: 64px;
+      width: 72px;
+      height: 72px;
       flex: 0 0 auto;
     }
     .brand-copy {
       min-width: 0;
     }
     h1 {
-      font-size: 42px;
-      line-height: 1.1;
       margin: 0;
+      letter-spacing: 0;
+    }
+    .brand-script {
+      display: block;
+      font-size: 38px;
+      line-height: .9;
       color: var(--accent);
       font-family: var(--display);
       font-weight: 700;
       letter-spacing: 0;
       text-shadow: 2px 2px 0 var(--cream), 4px 4px 0 color-mix(in srgb, var(--cyan), transparent 48%);
+    }
+    .brand-block {
+      display: block;
+      color: var(--text);
+      font-family: var(--block-display);
+      font-size: 31px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      line-height: .95;
+      margin-top: 3px;
+      text-shadow: 1px 1px 0 var(--cream);
     }
     .brand-subtitle {
       color: var(--muted);
@@ -188,8 +204,9 @@ const indexHTML = `<!doctype html>
     @media (max-width: 780px) {
       main { width: min(100vw - 20px, 1100px); padding: 14px 0; }
       header { align-items: flex-start; flex-direction: column; }
-      h1 { font-size: 36px; }
-      .brand-mark { width: 56px; height: 56px; }
+      .brand-script { font-size: 34px; }
+      .brand-block { font-size: 27px; }
+      .brand-mark { width: 62px; height: 62px; }
       .grid { grid-template-columns: 1fr; }
       dl { grid-template-columns: 1fr; }
       dd { margin-bottom: 6px; }
@@ -202,29 +219,31 @@ const indexHTML = `<!doctype html>
       <div class="brand" aria-label="Big Red Button">
         <svg class="brand-mark" viewBox="0 0 96 96" role="img" aria-hidden="true">
           <defs>
-            <linearGradient id="miniBg" x1="12" x2="84" y1="8" y2="88" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#19253d"/>
-              <stop offset="1" stop-color="#0a1020"/>
+            <linearGradient id="miniBg" x1="15" x2="81" y1="14" y2="81" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#253d65"/>
+              <stop offset="1" stop-color="#101827"/>
             </linearGradient>
-            <radialGradient id="miniButton" cx="38" cy="37" r="35" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#ff756a"/>
-              <stop offset=".45" stop-color="#e3272f"/>
-              <stop offset="1" stop-color="#7f101a"/>
+            <radialGradient id="miniButton" cx="46" cy="37" r="41" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#ff8277"/>
+              <stop offset=".5" stop-color="#df2630"/>
+              <stop offset="1" stop-color="#82121c"/>
             </radialGradient>
           </defs>
-          <rect width="96" height="96" rx="22" fill="url(#miniBg)"/>
-          <path d="M48 9 25 18v20c0 19 10 33 23 40 13-7 23-21 23-40V18L48 9Z" fill="#17233a" stroke="#7dd3fc" stroke-width="3" stroke-linejoin="round"/>
-          <path d="M27 34h12c5 0 7 4 12 4h18" fill="none" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round" opacity=".7"/>
-          <path d="M27 45h10c8 0 12-8 20-8h13" fill="none" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round" opacity=".58"/>
-          <ellipse cx="48" cy="66" rx="31" ry="13" fill="#5f0f18"/>
-          <circle cx="48" cy="52" r="24" fill="url(#miniButton)" stroke="#3f0b12" stroke-width="3"/>
-          <path d="M34 49c5-15 19-22 34-15-5-9-16-13-27-8-9 4-15 13-14 22 1 4 2 7 4 9 1-3 2-5 3-8Z" fill="#ffa19a" opacity=".6"/>
-          <path d="M41 51v-5c0-7 5-12 12-12s12 5 12 12v5h-6v-5c0-3-2-6-6-6s-6 3-6 6v5h-6Z" fill="none" stroke="#fff3cc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-          <rect x="38" y="50" width="21" height="16" rx="3" fill="#fff3cc"/>
+          <rect width="96" height="96" rx="22" fill="#f9ecd0"/>
+          <circle cx="48" cy="48" r="40" fill="#fff2c6"/>
+          <circle cx="48" cy="48" r="35" fill="url(#miniBg)" stroke="#0f7890" stroke-width="3"/>
+          <path d="M48 15 58 36 82 39 65 55 69 78 48 67 27 78 31 55 14 39 38 36Z" fill="#fff2c6" opacity=".12"/>
+          <path d="M20 35c17-11 39-11 56 0M20 61c17 11 39 11 56 0" fill="none" stroke="#82dcf8" stroke-width="3" stroke-linecap="round"/>
+          <path d="M19 48h15c7 0 9-7 15-7h28" fill="none" stroke="#82dcf8" stroke-width="3" stroke-linecap="round" opacity=".65"/>
+          <ellipse cx="48" cy="66" rx="26" ry="10" fill="#681019"/>
+          <circle cx="48" cy="49" r="23" fill="url(#miniButton)" stroke="#5f0b15" stroke-width="3"/>
+          <path d="M33 45c4-12 16-18 29-13-4-7-14-10-22-6-8 3-13 11-12 19 0 3 1 6 3 8 1-3 2-6 2-8Z" fill="#ffaaa1" opacity=".62"/>
+          <path d="M40 48v-5c0-6 5-11 11-11s11 5 11 11v5h-5v-5c0-3-3-6-6-6s-6 3-6 6v5h-5Z" fill="none" stroke="#fff2c6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="37" y="46" width="22" height="18" rx="3" fill="#fff2c6"/>
         </svg>
         <div class="brand-copy">
-          <h1>Big Red Button</h1>
-          <div class="brand-subtitle">WireGuard over WSTunnel launcher</div>
+          <h1><span class="brand-script">Big Red</span><span class="brand-block">BUTTON</span></h1>
+          <div class="brand-subtitle">VPN launcher</div>
         </div>
       </div>
       <div class="status-pill" id="state">loading</div>
@@ -235,7 +254,7 @@ const indexHTML = `<!doctype html>
         <h2>Profile</h2>
         <form id="profile-form">
           <label>
-            V7 JSON profile
+            VPN profile JSON
             <input id="profile-file" name="profile" type="file" accept=".json,application/json">
           </label>
           <button type="submit">Save Profile</button>
@@ -246,11 +265,11 @@ const indexHTML = `<!doctype html>
       <section>
         <h2>Connection</h2>
         <label>
-          Endpoint IP
+          Tunnel gateway IP
           <input id="endpoint-ip" autocomplete="off" placeholder="203.0.113.10">
         </label>
         <label>
-          WSTunnel binary
+          Tunnel helper binary
           <input id="wstunnel-binary" autocomplete="off" placeholder="/usr/bin/wstunnel">
         </label>
         <div class="row">
@@ -315,9 +334,8 @@ const indexHTML = `<!doctype html>
 
       if (data.profile) {
         profileSummaryEl.innerHTML = definitionList([
-          ['profile', data.profile.profile],
           ['server', data.profile.server + ':' + data.profile.port],
-          ['wstunnel', data.profile.wstunnel_url],
+          ['gateway', data.profile.wstunnel_url],
           ['addresses', (data.profile.addresses || []).join(', ')],
           ['allowed IPs', (data.profile.allowed_ips || []).join(', ')],
           ['fingerprint', data.profile.fingerprint]
@@ -329,7 +347,7 @@ const indexHTML = `<!doctype html>
       runtimeEl.innerHTML = definitionList([
         ['state', data.runtime.state],
         ['runtime root', data.runtime.runtime_root],
-        ['profile', data.runtime.active ? data.runtime.active.profile_fingerprint : ''],
+        ['profile fingerprint', data.runtime.active ? data.runtime.active.profile_fingerprint : ''],
         ['interface', data.runtime.active ? data.runtime.active.wireguard_interface : ''],
         ['error', data.runtime.error || '']
       ]);

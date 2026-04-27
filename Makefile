@@ -1,6 +1,6 @@
 BINARY := big-red-button
 GUI_BINARY := big-red-button-gui
-VERSION ?= 0.2.0
+VERSION ?= 0.2.1
 PREFIX ?= /usr/local
 
 .PHONY: build test vet install clean arch-package macos-package

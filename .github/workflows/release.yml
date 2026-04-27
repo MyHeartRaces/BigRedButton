@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag, for example v0.2.0"
+        description: "Release tag, for example v0.2.1"
         required: true
-        default: "v0.2.0"
+        default: "v0.2.1"
 
 permissions:
   contents: write
@@ -18,7 +18,7 @@ env:
   GO_VERSION: 1.24.x
   BINARY_NAME: big-red-button
   GUI_BINARY_NAME: big-red-button-gui
-  VERSION: 0.2.0
+  VERSION: 0.2.1
 
 jobs:
   windows-11-arm64:
@@ -51,7 +51,7 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive `
-            -Path "dist/windows-arm64/${{ env.BINARY_NAME }}.exe", "dist/windows-arm64/${{ env.GUI_BINARY_NAME }}.exe", "README.md", "LICENSE" `
+            -Path "dist/windows-arm64/${{ env.BINARY_NAME }}.exe", "dist/windows-arm64/${{ env.GUI_BINARY_NAME }}.exe", "packaging/assets/big-red-button.ico", "README.md", "LICENSE" `
             -DestinationPath "dist/${{ env.BINARY_NAME }}_windows_11_arm64.zip" `
             -Force
 
@@ -113,7 +113,7 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive `
-            -Path "dist/windows-amd64/${{ env.BINARY_NAME }}.exe", "dist/windows-amd64/${{ env.GUI_BINARY_NAME }}.exe", "README.md", "LICENSE" `
+            -Path "dist/windows-amd64/${{ env.BINARY_NAME }}.exe", "dist/windows-amd64/${{ env.GUI_BINARY_NAME }}.exe", "packaging/assets/big-red-button.ico", "README.md", "LICENSE" `
             -DestinationPath "dist/${{ env.BINARY_NAME }}_windows_amd64.zip" `
             -Force
 

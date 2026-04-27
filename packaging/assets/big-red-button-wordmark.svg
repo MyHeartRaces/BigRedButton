@@ -1,69 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 320" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 320" role="img" aria-labelledby="title desc">
   <title id="title">Big Red Button wordmark</title>
-  <desc id="desc">Retro 1950s-style wordmark for a VPN launcher with a red button logo.</desc>
+  <desc id="desc">A retro VPN launcher wordmark with a red button badge and mid-century lettering.</desc>
   <defs>
-    <linearGradient id="markBg" x1="30" x2="250" y1="32" y2="252" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#19253d"/>
-      <stop offset=".55" stop-color="#111827"/>
-      <stop offset="1" stop-color="#0a1020"/>
-    </linearGradient>
-    <linearGradient id="markShield" x1="76" x2="204" y1="45" y2="234" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2d3f62"/>
-      <stop offset="1" stop-color="#121b2d"/>
-    </linearGradient>
-    <radialGradient id="markButton" cx="123" cy="115" r="92" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ff756a"/>
-      <stop offset=".42" stop-color="#e3272f"/>
-      <stop offset=".78" stop-color="#b41422"/>
-      <stop offset="1" stop-color="#7f101a"/>
+    <radialGradient id="red" cx="120" cy="96" r="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff8277"/>
+      <stop offset=".5" stop-color="#df2630"/>
+      <stop offset="1" stop-color="#82121c"/>
     </radialGradient>
-    <linearGradient id="markMetal" x1="105" x2="176" y1="137" y2="196" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fff9e8"/>
-      <stop offset=".48" stop-color="#f8e7bd"/>
-      <stop offset="1" stop-color="#b99a5e"/>
+    <linearGradient id="navy" x1="32" x2="236" y1="28" y2="238" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#253d65"/>
+      <stop offset="1" stop-color="#101827"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="94" x2="156" y1="95" y2="158" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff8d5"/>
+      <stop offset="1" stop-color="#dcae5c"/>
     </linearGradient>
     <style>
       .script {
         font-family: "Brush Script MT", "Brush Script", "Savoye LET", "Apple Chancery", cursive;
-        font-size: 130px;
+        font-size: 118px;
         font-weight: 700;
         letter-spacing: 0;
       }
       .block {
-        font-family: "Cooper Black", "Rockwell Extra Bold", "American Typewriter", Georgia, serif;
-        font-size: 72px;
+        font-family: "Phosphate", "Cooper Black", "Rockwell Extra Bold", Georgia, serif;
+        font-size: 100px;
         font-weight: 900;
-        letter-spacing: 6px;
+        letter-spacing: 7px;
       }
     </style>
   </defs>
-  <g transform="translate(22 30)">
-    <rect width="242" height="242" rx="52" fill="url(#markBg)"/>
-    <path d="M121 24 60 48v53c0 47 26 82 61 99 35-17 61-52 61-99V48L121 24Z" fill="url(#markShield)" stroke="#7dd3fc" stroke-width="6" stroke-linejoin="round"/>
-    <path d="M70 84h30c12 0 17 8 28 8h43" fill="none" stroke="#7dd3fc" stroke-width="6" stroke-linecap="round" opacity=".64"/>
-    <path d="M70 112h25c20 0 27-17 46-17h31" fill="none" stroke="#7dd3fc" stroke-width="6" stroke-linecap="round" opacity=".54"/>
-    <path d="M71 140h30c13 0 20 12 34 12h37" fill="none" stroke="#7dd3fc" stroke-width="6" stroke-linecap="round" opacity=".5"/>
-    <circle cx="68" cy="84" r="8" fill="#b7f4ff" stroke="#13233a" stroke-width="3"/>
-    <circle cx="174" cy="84" r="8" fill="#b7f4ff" stroke="#13233a" stroke-width="3"/>
-    <circle cx="68" cy="112" r="8" fill="#b7f4ff" stroke="#13233a" stroke-width="3"/>
-    <circle cx="174" cy="95" r="8" fill="#b7f4ff" stroke="#13233a" stroke-width="3"/>
-    <circle cx="68" cy="140" r="8" fill="#b7f4ff" stroke="#13233a" stroke-width="3"/>
-    <circle cx="174" cy="152" r="8" fill="#b7f4ff" stroke="#13233a" stroke-width="3"/>
-    <ellipse cx="121" cy="162" rx="74" ry="35" fill="#5f0f18"/>
-    <circle cx="121" cy="129" r="57" fill="url(#markButton)" stroke="#3f0b12" stroke-width="5"/>
-    <path d="M76 120c12-35 45-51 80-35-11-20-38-31-63-20-22 10-35 31-33 53 1 8 3 15 7 21 2-6 5-12 9-19Z" fill="#ffa19a" opacity=".58"/>
-    <path d="M104 123v-14c0-16 12-28 28-28s28 12 28 28v14h-15v-14c0-8-5-14-13-14s-13 6-13 14v14h-15Z" fill="none" stroke="url(#markMetal)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-    <rect x="96" y="120" width="51" height="40" rx="8" fill="url(#markMetal)"/>
+  <rect width="850" height="320" fill="#f9ecd0"/>
+  <g transform="translate(54 34)">
+    <circle cx="126" cy="126" r="118" fill="#fff2c6"/>
+    <circle cx="126" cy="126" r="104" fill="url(#navy)" stroke="#0f7890" stroke-width="8"/>
+    <path d="M126 27 157 88 224 98 175 146 187 213 126 181 65 213 77 146 28 98 95 88Z" fill="#fff2c6" opacity=".12"/>
+    <path d="M53 90c44-29 102-29 146 0M53 162c44 29 102 29 146 0" fill="none" stroke="#82dcf8" stroke-width="8" stroke-linecap="round"/>
+    <path d="M50 126h40c18 0 23-17 40-17h72" fill="none" stroke="#82dcf8" stroke-width="7" stroke-linecap="round" opacity=".65"/>
+    <circle cx="49" cy="126" r="10" fill="#bdf6ff" stroke="#0b1a30" stroke-width="4"/>
+    <circle cx="203" cy="126" r="10" fill="#bdf6ff" stroke="#0b1a30" stroke-width="4"/>
+    <ellipse cx="126" cy="172" rx="69" ry="27" fill="#681019"/>
+    <circle cx="126" cy="127" r="59" fill="url(#red)" stroke="#5f0b15" stroke-width="7"/>
+    <path d="M88 114c11-32 40-48 73-34-10-17-34-26-57-16-20 9-33 28-32 49 1 8 3 15 7 22 2-7 5-14 9-21Z" fill="#ffaaa1" opacity=".62"/>
+    <path d="M106 123v-14c0-15 12-27 27-27s27 12 27 27v14h-13v-14c0-8-6-14-14-14s-14 6-14 14v14h-13Z" fill="none" stroke="url(#gold)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="96" y="118" width="58" height="45" rx="9" fill="url(#gold)"/>
   </g>
-  <g transform="translate(300 26)">
-    <text class="script" x="8" y="123" fill="#0f4f5f" opacity=".9" stroke="#0f4f5f" stroke-width="12" paint-order="stroke fill">Big Red</text>
-    <text class="script" x="0" y="112" fill="#d62828" stroke="#fff3cc" stroke-width="13" paint-order="stroke fill">Big Red</text>
-    <text class="script" x="0" y="112" fill="#ef3d35">Big Red</text>
-    <path d="M34 147H764" fill="none" stroke="#7dd3fc" stroke-width="8" stroke-linecap="round" opacity=".72"/>
-    <path d="M34 166H764" fill="none" stroke="#142338" stroke-width="5" stroke-linecap="round" opacity=".5"/>
-    <circle cx="34" cy="147" r="15" fill="#b7f4ff" stroke="#142338" stroke-width="6"/>
-    <circle cx="764" cy="147" r="15" fill="#b7f4ff" stroke="#142338" stroke-width="6"/>
-    <text class="block" x="24" y="244" fill="#12203a" stroke="#fff3cc" stroke-width="9" paint-order="stroke fill">BUTTON</text>
-    <text class="block" x="24" y="244" fill="#f3d27b">BUTTON</text>
+  <g transform="translate(320 26)">
+    <text class="script" x="4" y="98" fill="#0d5364" stroke="#0d5364" stroke-width="10" paint-order="stroke fill">Big Red</text>
+    <text class="script" x="0" y="87" fill="#e02c32" stroke="#fff2c6" stroke-width="13" paint-order="stroke fill">Big Red</text>
+    <rect x="36" y="138" width="455" height="10" rx="5" fill="#7dd3fc"/>
+    <circle cx="36" cy="143" r="15" fill="#bdf6ff" stroke="#12213a" stroke-width="6"/>
+    <circle cx="491" cy="143" r="15" fill="#bdf6ff" stroke="#12213a" stroke-width="6"/>
+    <text class="block" x="8" y="268" fill="#172033" stroke="#fff2c6" stroke-width="8" paint-order="stroke fill">BUTTON</text>
   </g>
 </svg>

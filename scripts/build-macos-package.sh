@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-version="${VERSION:-0.2.0}"
+version="${VERSION:-0.2.1}"
 app_name="Big Red Button"
 bundle_id="com.myheartraces.bigredbutton"
 dist_dir="${repo_root}/dist/macos"
@@ -18,6 +18,8 @@ mkdir -p "${app_dir}/Contents/MacOS" "${app_dir}/Contents/Resources" "${pkgroot}
   CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false -ldflags "-s -w" -o "${app_dir}/Contents/MacOS/big-red-button-gui" ./cmd/big-red-button-gui
 )
 
+cp "${repo_root}/packaging/assets/big-red-button.icns" "${app_dir}/Contents/Resources/big-red-button.icns"
+
 cat > "${app_dir}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -31,6 +33,8 @@ cat > "${app_dir}/Contents/Info.plist" <<PLIST
   <string>big-red-button-gui</string>
   <key>CFBundleIdentifier</key>
   <string>${bundle_id}</string>
+  <key>CFBundleIconFile</key>
+  <string>big-red-button</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>

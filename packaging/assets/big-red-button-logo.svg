@@ -1,51 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">Big Red Button VPN logo</title>
-  <desc id="desc">A glossy red button over a protected VPN shield with connected tunnel nodes.</desc>
+  <title id="title">Big Red Button VPN launcher icon</title>
+  <desc id="desc">A retro cream badge with a red button, lock, and VPN tunnel links.</desc>
   <defs>
-    <linearGradient id="bg" x1="74" x2="438" y1="48" y2="464" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#19253d"/>
-      <stop offset=".55" stop-color="#111827"/>
-      <stop offset="1" stop-color="#0a1020"/>
-    </linearGradient>
-    <linearGradient id="shield" x1="141" x2="371" y1="72" y2="420" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2d3f62"/>
-      <stop offset="1" stop-color="#121b2d"/>
-    </linearGradient>
-    <linearGradient id="buttonBase" x1="111" x2="401" y1="245" y2="426" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#a91520"/>
-      <stop offset=".48" stop-color="#6f1018"/>
-      <stop offset="1" stop-color="#3f0b12"/>
-    </linearGradient>
-    <radialGradient id="buttonTop" cx="218" cy="204" r="181" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ff756a"/>
-      <stop offset=".42" stop-color="#e3272f"/>
-      <stop offset=".75" stop-color="#b41422"/>
-      <stop offset="1" stop-color="#7f101a"/>
+    <radialGradient id="red" cx="248" cy="205" r="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff8277"/>
+      <stop offset=".5" stop-color="#df2630"/>
+      <stop offset="1" stop-color="#82121c"/>
     </radialGradient>
-    <linearGradient id="metal" x1="180" x2="332" y1="248" y2="368" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fff9e8"/>
-      <stop offset=".48" stop-color="#f8e7bd"/>
-      <stop offset="1" stop-color="#b99a5e"/>
+    <linearGradient id="navy" x1="80" x2="432" y1="72" y2="430" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#253d65"/>
+      <stop offset="1" stop-color="#101827"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="205" x2="323" y1="203" y2="326" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff8d5"/>
+      <stop offset="1" stop-color="#dcae5c"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
-  <path d="M256 50 128 99v111c0 99 54 173 128 209 74-36 128-110 128-209V99L256 50Z" fill="url(#shield)" stroke="#7dd3fc" stroke-width="11" stroke-linejoin="round"/>
-  <path d="M150 169h64c24 0 35 18 58 18h90" fill="none" stroke="#7dd3fc" stroke-width="10" stroke-linecap="round" opacity=".62"/>
-  <path d="M148 227h53c42 0 57-36 97-36h66" fill="none" stroke="#7dd3fc" stroke-width="10" stroke-linecap="round" opacity=".54"/>
-  <path d="M151 287h62c28 0 42 24 72 24h78" fill="none" stroke="#7dd3fc" stroke-width="10" stroke-linecap="round" opacity=".48"/>
-  <circle cx="145" cy="169" r="15" fill="#b7f4ff" stroke="#13233a" stroke-width="6"/>
-  <circle cx="366" cy="169" r="15" fill="#b7f4ff" stroke="#13233a" stroke-width="6"/>
-  <circle cx="145" cy="227" r="15" fill="#b7f4ff" stroke="#13233a" stroke-width="6"/>
-  <circle cx="366" cy="191" r="15" fill="#b7f4ff" stroke="#13233a" stroke-width="6"/>
-  <circle cx="145" cy="287" r="15" fill="#b7f4ff" stroke="#13233a" stroke-width="6"/>
-  <circle cx="366" cy="311" r="15" fill="#b7f4ff" stroke="#13233a" stroke-width="6"/>
-  <ellipse cx="256" cy="342" rx="158" ry="64" fill="#050812" opacity=".45"/>
-  <ellipse cx="256" cy="332" rx="154" ry="73" fill="url(#buttonBase)"/>
-  <circle cx="256" cy="260" r="119" fill="url(#buttonTop)" stroke="#3f0b12" stroke-width="10"/>
-  <path d="M160 240c24-73 94-107 167-74-22-43-79-65-132-42-45 20-72 65-68 111 1 16 6 31 14 44 4-13 10-26 19-39Z" fill="#ffa19a" opacity=".58"/>
-  <path d="M140 305c39 74 132 99 202 50 37-26 57-67 56-107 16 75-31 151-108 171-69 18-138-14-172-75Z" fill="#2a0710" opacity=".38"/>
-  <path d="M219 248v-28c0-30 23-53 53-53s53 23 53 53v28h-28v-28c0-15-10-26-25-26s-25 11-25 26v28h-28Z" fill="none" stroke="url(#metal)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="203" y="241" width="106" height="82" rx="16" fill="url(#metal)"/>
-  <circle cx="256" cy="279" r="12" fill="#5c1419"/>
-  <path d="M256 290v18" stroke="#5c1419" stroke-width="10" stroke-linecap="round"/>
+  <rect width="512" height="512" rx="112" fill="#f9ecd0"/>
+  <circle cx="256" cy="256" r="213" fill="#fff2c6"/>
+  <circle cx="256" cy="256" r="188" fill="url(#navy)" stroke="#0f7890" stroke-width="13"/>
+  <path d="M256 78 312 188 433 206 345 292 366 412 256 354 146 412 167 292 79 206 200 188Z" fill="#fff2c6" opacity=".12"/>
+  <path d="M111 185c87-56 203-56 290 0M111 326c87 56 203 56 290 0" fill="none" stroke="#82dcf8" stroke-width="14" stroke-linecap="round"/>
+  <path d="M104 256h80c35 0 46-34 80-34h145" fill="none" stroke="#82dcf8" stroke-width="12" stroke-linecap="round" opacity=".65"/>
+  <circle cx="103" cy="256" r="18" fill="#bdf6ff" stroke="#0b1a30" stroke-width="7"/>
+  <circle cx="409" cy="256" r="18" fill="#bdf6ff" stroke="#0b1a30" stroke-width="7"/>
+  <circle cx="111" cy="185" r="15" fill="#bdf6ff" stroke="#0b1a30" stroke-width="6"/>
+  <circle cx="401" cy="185" r="15" fill="#bdf6ff" stroke="#0b1a30" stroke-width="6"/>
+  <circle cx="111" cy="326" r="15" fill="#bdf6ff" stroke="#0b1a30" stroke-width="6"/>
+  <circle cx="401" cy="326" r="15" fill="#bdf6ff" stroke="#0b1a30" stroke-width="6"/>
+  <ellipse cx="256" cy="349" rx="137" ry="53" fill="#681019"/>
+  <circle cx="256" cy="260" r="116" fill="url(#red)" stroke="#5f0b15" stroke-width="13"/>
+  <path d="M181 235c21-63 79-94 144-66-20-34-68-51-113-33-41 17-65 56-64 98 2 15 7 29 14 42 4-14 10-28 19-41Z" fill="#ffaaa1" opacity=".62"/>
+  <path d="M217 252v-27c0-31 24-55 55-55s55 24 55 55v27h-27v-27c0-16-12-28-28-28s-28 12-28 28v27h-27Z" fill="none" stroke="url(#gold)" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="198" y="241" width="116" height="91" rx="18" fill="url(#gold)"/>
+  <circle cx="256" cy="287" r="13" fill="#67121a"/>
+  <path d="M256 301v22" stroke="#67121a" stroke-width="11" stroke-linecap="round"/>
 </svg>
