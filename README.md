@@ -62,6 +62,22 @@ make build
 
 The binary is written to `build/big-red-button`.
 
+## GitHub Actions Builds
+
+The repository includes `.github/workflows/build.yml`.
+
+It builds and uploads artifacts for:
+
+- Windows 11 arm64: `big-red-button_windows_11_arm64.zip`
+- Windows amd64 compatible: `big-red-button_windows_amd64.zip`
+- macOS arm64: `big-red-button_darwin_arm64.tar.gz`
+- Arch Linux package: `big-red-button-*.pkg.tar.*`
+
+The Windows amd64 job runs on GitHub's hosted Windows Server runner because
+GitHub does not provide a standard hosted Windows 11 x64 runner. Use a
+self-hosted or larger Windows 11 x64 runner if that distinction becomes
+important for UI/system-integration testing.
+
 ## Arch Linux Package
 
 From a clean checkout on Arch Linux:

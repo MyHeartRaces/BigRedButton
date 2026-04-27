@@ -1,0 +1,171 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: 1.24.x
+  BINARY_NAME: big-red-button
+
+jobs:
+  windows-11-arm64:
+    name: Windows 11 arm64
+    runs-on: windows-11-arm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Test
+        shell: pwsh
+        run: go test ./...
+
+      - name: Build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist/windows-arm64" | Out-Null
+          $env:CGO_ENABLED = "0"
+          go build -trimpath -ldflags "-s -w" -o "dist/windows-arm64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "dist/windows-arm64/${{ env.BINARY_NAME }}.exe", "README.md", "LICENSE" `
+            -DestinationPath "dist/${{ env.BINARY_NAME }}_windows_11_arm64.zip" `
+            -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}_windows_11_arm64
+          path: dist/${{ env.BINARY_NAME }}_windows_11_arm64.zip
+          if-no-files-found: error
+
+  windows-amd64:
+    name: Windows amd64 compatible
+    # GitHub's standard hosted Windows x64 runners are Windows Server images.
+    # This artifact is the build most Windows 11 x64 testers will need.
+    runs-on: windows-2025
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Test
+        shell: pwsh
+        run: go test ./...
+
+      - name: Build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist/windows-amd64" | Out-Null
+          $env:CGO_ENABLED = "0"
+          go build -trimpath -ldflags "-s -w" -o "dist/windows-amd64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "dist/windows-amd64/${{ env.BINARY_NAME }}.exe", "README.md", "LICENSE" `
+            -DestinationPath "dist/${{ env.BINARY_NAME }}_windows_amd64.zip" `
+            -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}_windows_amd64
+          path: dist/${{ env.BINARY_NAME }}_windows_amd64.zip
+          if-no-files-found: error
+
+  macos-arm64:
+    name: macOS arm64
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: |
+          mkdir -p dist/macos-arm64
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/macos-arm64/${BINARY_NAME}" "./cmd/${BINARY_NAME}"
+
+      - name: Package
+        run: |
+          mkdir -p "dist/package/${BINARY_NAME}_darwin_arm64"
+          cp "dist/macos-arm64/${BINARY_NAME}" "dist/package/${BINARY_NAME}_darwin_arm64/${BINARY_NAME}"
+          cp README.md LICENSE "dist/package/${BINARY_NAME}_darwin_arm64/"
+          tar -C dist/package -czf "dist/${BINARY_NAME}_darwin_arm64.tar.gz" "${BINARY_NAME}_darwin_arm64"
+          tar -tzf "dist/${BINARY_NAME}_darwin_arm64.tar.gz" >/dev/null
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}_darwin_arm64
+          path: dist/${{ env.BINARY_NAME }}_darwin_arm64.tar.gz
+          if-no-files-found: error
+
+  arch-linux:
+    name: Arch Linux package
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build package in Arch Linux
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            archlinux:base-devel \
+            bash -lc '
+              set -euo pipefail
+              pacman -Syu --noconfirm --needed base-devel git go sudo
+              useradd -m builder
+              printf "builder ALL=(ALL) NOPASSWD: ALL\n" > /etc/sudoers.d/builder
+              chmod 0440 /etc/sudoers.d/builder
+              mkdir -p /workspace/dist
+              chown -R builder:builder /workspace/dist /home/builder
+              chmod -R a+rX /workspace
+              runuser -u builder -- bash -lc "cd /workspace && git config --global --add safe.directory /workspace && go test ./... && ./scripts/build-arch-package.sh"
+              chmod -R a+rX /workspace/dist
+            '
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}_archlinux_pkg
+          path: |
+            dist/arch/makepkg/${{ env.BINARY_NAME }}-*.pkg.tar.*
+            dist/arch/makepkg/${{ env.BINARY_NAME }}-*.tar.gz
+          if-no-files-found: error
