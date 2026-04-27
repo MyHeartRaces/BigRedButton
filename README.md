@@ -79,6 +79,7 @@ Implemented so far:
 - secret-free runtime state model and file store for future disconnect/rollback
 - Linux dry-run disconnect can read runtime state and plan saved route cleanup
 - real Linux route executor for endpoint exclusions, covered by fake-runner tests
+- WSTunnel client command builder for WireGuard UDP forwarding
 - redacted valid and invalid fixtures
 
 ## Repository Layout
