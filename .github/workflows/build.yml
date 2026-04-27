@@ -38,7 +38,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "dist/windows-arm64" | Out-Null
           $env:CGO_ENABLED = "0"
-          go build -trimpath -ldflags "-s -w" -o "dist/windows-arm64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+          go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/windows-arm64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
 
       - name: Package
         shell: pwsh
@@ -80,7 +80,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "dist/windows-amd64" | Out-Null
           $env:CGO_ENABLED = "0"
-          go build -trimpath -ldflags "-s -w" -o "dist/windows-amd64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+          go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/windows-amd64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
 
       - name: Package
         shell: pwsh
@@ -117,7 +117,7 @@ jobs:
       - name: Build
         run: |
           mkdir -p dist/macos-arm64
-          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/macos-arm64/${BINARY_NAME}" "./cmd/${BINARY_NAME}"
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/macos-arm64/${BINARY_NAME}" "./cmd/${BINARY_NAME}"
 
       - name: Package
         run: |

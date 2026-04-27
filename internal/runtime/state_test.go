@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	stdruntime "runtime"
 	"strings"
 	"testing"
 
@@ -108,9 +109,7 @@ func TestStoreSaveLoadAndClear(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("state mode = %o", info.Mode().Perm())
-	}
+	assertPrivateFileMode(t, info)
 
 	loaded, err := store.Load(context.Background())
 	if err != nil {
@@ -153,9 +152,7 @@ func TestStoreSaveTightensExistingFileMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("state mode = %o", info.Mode().Perm())
-	}
+	assertPrivateFileMode(t, info)
 }
 
 func TestStoreRejectsEmptyRoot(t *testing.T) {
@@ -195,4 +192,14 @@ func loadProfile(t *testing.T) profile.Config {
 		t.Fatal(err)
 	}
 	return config
+}
+
+func assertPrivateFileMode(t *testing.T, info os.FileInfo) {
+	t.Helper()
+	if stdruntime.GOOS == "windows" {
+		return
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("state mode = %o", info.Mode().Perm())
+	}
 }

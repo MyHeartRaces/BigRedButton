@@ -6,7 +6,7 @@ PREFIX ?= /usr/local
 
 build:
 	@mkdir -p build
-	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o build/$(BINARY) ./cmd/$(BINARY)
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w" -o build/$(BINARY) ./cmd/$(BINARY)
 
 test:
 	go test ./...
