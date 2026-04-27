@@ -6,6 +6,7 @@ pkgbase = big-red-button
 	arch = x86_64
 	arch = aarch64
 	license = MIT
+	options = !debug
 	makedepends = go
 	depends = iproute2
 	depends = wireguard-tools

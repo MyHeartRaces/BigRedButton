@@ -6,6 +6,7 @@ pkgdesc='Headless Linux client for WireGuard over WSTunnel'
 arch=('x86_64' 'aarch64')
 url='https://github.com/MyHeartRaces/BigRedButton'
 license=('MIT')
+options=('!debug')
 depends=('iproute2' 'wireguard-tools')
 makedepends=('go')
 optdepends=('wstunnel: WSTunnel client binary required for real connections')

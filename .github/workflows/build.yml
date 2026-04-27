@@ -167,5 +167,6 @@ jobs:
           name: ${{ env.BINARY_NAME }}_archlinux_pkg
           path: |
             dist/arch/makepkg/${{ env.BINARY_NAME }}-*.pkg.tar.*
+            !dist/arch/makepkg/${{ env.BINARY_NAME }}-debug-*.pkg.tar.*
             dist/arch/makepkg/${{ env.BINARY_NAME }}-*.tar.gz
           if-no-files-found: error
