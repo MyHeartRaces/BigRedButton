@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="packaging/assets/big-red-button-wordmark.svg" alt="Big Red Button" width="720">
+</p>
+
 # Big Red Button
 
 Big Red Button is a desktop launcher and CLI for a single V7 profile:
