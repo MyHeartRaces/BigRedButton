@@ -18,11 +18,18 @@ const (
 )
 
 type State struct {
-	Version            int                        `json:"version"`
-	Profile            string                     `json:"profile,omitempty"`
-	ProfileFingerprint string                     `json:"profile_fingerprint"`
-	WireGuardInterface string                     `json:"wireguard_interface"`
-	RouteExclusions    []routes.EndpointExclusion `json:"route_exclusions,omitempty"`
+	Version             int                        `json:"version"`
+	Profile             string                     `json:"profile,omitempty"`
+	ProfileFingerprint  string                     `json:"profile_fingerprint"`
+	WireGuardInterface  string                     `json:"wireguard_interface"`
+	RouteExclusions     []routes.EndpointExclusion `json:"route_exclusions,omitempty"`
+	WSTunnelProcess     *ProcessState              `json:"wstunnel_process,omitempty"`
+	WireGuardAllowedIPs []string                   `json:"wireguard_allowed_ips,omitempty"`
+}
+
+type ProcessState struct {
+	PID  int      `json:"pid"`
+	Argv []string `json:"argv,omitempty"`
 }
 
 type Store struct {
@@ -34,11 +41,12 @@ func NewStateFromConnectPlan(plan planner.Plan) (State, error) {
 		return State{}, fmt.Errorf("runtime state can only be built from connect plan")
 	}
 	state := State{
-		Version:            StateVersion,
-		Profile:            plan.Profile,
-		ProfileFingerprint: plan.ProfileFingerprint,
-		WireGuardInterface: plan.WireGuardInterface,
-		RouteExclusions:    cloneRouteExclusions(plan.RouteExclusions),
+		Version:             StateVersion,
+		Profile:             plan.Profile,
+		ProfileFingerprint:  plan.ProfileFingerprint,
+		WireGuardInterface:  plan.WireGuardInterface,
+		RouteExclusions:     cloneRouteExclusions(plan.RouteExclusions),
+		WireGuardAllowedIPs: allowedIPsFromPlan(plan),
 	}
 	if err := state.Validate(); err != nil {
 		return State{}, err
@@ -64,7 +72,18 @@ func (s State) Validate() error {
 			return fmt.Errorf("runtime state route exclusion %d destination is required", index)
 		}
 	}
+	if s.WSTunnelProcess != nil && s.WSTunnelProcess.PID < 1 {
+		return fmt.Errorf("runtime state wstunnel process PID is required")
+	}
 	return nil
+}
+
+func (s State) WithWSTunnelProcess(pid int, argv []string) State {
+	s.WSTunnelProcess = &ProcessState{
+		PID:  pid,
+		Argv: append([]string(nil), argv...),
+	}
+	return s
 }
 
 func (s Store) Save(ctx context.Context, state State) error {
@@ -146,4 +165,20 @@ func cloneRouteExclusions(routeExclusions []routes.EndpointExclusion) []routes.E
 	cloned := make([]routes.EndpointExclusion, len(routeExclusions))
 	copy(cloned, routeExclusions)
 	return cloned
+}
+
+func allowedIPsFromPlan(plan planner.Plan) []string {
+	for _, step := range plan.Steps {
+		if step.ID != "apply-client-routes" {
+			continue
+		}
+		var allowedIPs []string
+		for _, detail := range step.Details {
+			if allowedIP, ok := strings.CutPrefix(detail, "allowed_ip="); ok {
+				allowedIPs = append(allowedIPs, allowedIP)
+			}
+		}
+		return allowedIPs
+	}
+	return nil
 }

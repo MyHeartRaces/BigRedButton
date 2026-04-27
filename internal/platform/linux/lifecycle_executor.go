@@ -94,6 +94,9 @@ func (e *LifecycleExecutor) Apply(ctx context.Context, step planner.Step) error 
 	if isNoopLifecycleStep(step) {
 		return nil
 	}
+	if step.ID == "store-runtime-state" {
+		return e.storeRuntimeState(ctx, step)
+	}
 	if isRouteExecutorStep("connect", step) || isRouteExecutorStep("disconnect", step) {
 		return e.route.Apply(ctx, step)
 	}
@@ -122,6 +125,22 @@ func (e *LifecycleExecutor) Rollback(ctx context.Context, step planner.Step) err
 	if isWireGuardStep(step) {
 		return e.wireguard.Rollback(ctx, step)
 	}
+	return nil
+}
+
+func (e *LifecycleExecutor) storeRuntimeState(ctx context.Context, step planner.Step) error {
+	state, err := e.route.stateFromPlan()
+	if err != nil {
+		return err
+	}
+	if info, ok := e.wstunnel.ProcessInfo(); ok {
+		state = state.WithWSTunnelProcess(info.PID, info.Command.Argv())
+	}
+	if err := e.route.store.Save(ctx, state); err != nil {
+		return err
+	}
+	e.route.runtimeState = state
+	e.route.recordRuntime(OperationApply, step.ID, "save "+e.route.storePath())
 	return nil
 }
 

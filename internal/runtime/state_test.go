@@ -36,6 +36,9 @@ func TestNewStateFromConnectPlanIsSecretFree(t *testing.T) {
 	if len(state.RouteExclusions) != 1 {
 		t.Fatalf("route exclusions = %#v", state.RouteExclusions)
 	}
+	if len(state.WireGuardAllowedIPs) != 2 {
+		t.Fatalf("allowed IPs = %#v", state.WireGuardAllowedIPs)
+	}
 	payload, err := json.Marshal(state)
 	if err != nil {
 		t.Fatal(err)
@@ -44,6 +47,44 @@ func TestNewStateFromConnectPlanIsSecretFree(t *testing.T) {
 		if secret != "" && strings.Contains(string(payload), secret) {
 			t.Fatalf("runtime state leaked secret material: %s", payload)
 		}
+	}
+}
+
+func TestStateWithWSTunnelProcess(t *testing.T) {
+	state := State{
+		Version:            StateVersion,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "tg-test",
+	}.WithWSTunnelProcess(4242, []string{"wstunnel", "client", "wss://edge.example.com:443"})
+
+	if err := state.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if state.WSTunnelProcess == nil {
+		t.Fatal("expected process state")
+	}
+	if state.WSTunnelProcess.PID != 4242 {
+		t.Fatalf("pid = %d", state.WSTunnelProcess.PID)
+	}
+	if state.WSTunnelProcess.Argv[0] != "wstunnel" {
+		t.Fatalf("argv = %#v", state.WSTunnelProcess.Argv)
+	}
+}
+
+func TestStateRejectsInvalidWSTunnelProcess(t *testing.T) {
+	state := State{
+		Version:            StateVersion,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "tg-test",
+		WSTunnelProcess:    &ProcessState{},
+	}
+
+	err := state.Validate()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "wstunnel process PID is required") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

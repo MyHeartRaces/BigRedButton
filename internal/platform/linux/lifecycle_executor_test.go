@@ -9,6 +9,7 @@ import (
 	"github.com/tracegate/tracegate-launcher/internal/engine"
 	"github.com/tracegate/tracegate-launcher/internal/planner"
 	"github.com/tracegate/tracegate-launcher/internal/profile"
+	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
 	"github.com/tracegate/tracegate-launcher/internal/supervisor"
 )
 
@@ -55,6 +56,16 @@ func TestLifecycleExecutorRunsConnectPlan(t *testing.T) {
 	}
 	if !writer.cleaned {
 		t.Fatal("expected wireguard secret config cleanup")
+	}
+	state, err := (truntime.Store{Root: runtimeRoot}).Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.WSTunnelProcess == nil || state.WSTunnelProcess.PID != 1 {
+		t.Fatalf("runtime state process = %#v", state.WSTunnelProcess)
+	}
+	if len(state.WireGuardAllowedIPs) != 2 {
+		t.Fatalf("runtime state allowed IPs = %#v", state.WireGuardAllowedIPs)
 	}
 	commands := flattenArgv(runner.argv)
 	for _, want := range []string{
