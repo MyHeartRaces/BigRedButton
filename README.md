@@ -80,6 +80,7 @@ Implemented so far:
 - Linux dry-run disconnect can read runtime state and plan saved route cleanup
 - real Linux route executor for endpoint exclusions, covered by fake-runner tests
 - WSTunnel client command builder for WireGuard UDP forwarding
+- WSTunnel process runner/executor abstraction with rollback tests
 - redacted valid and invalid fixtures
 
 ## Repository Layout
