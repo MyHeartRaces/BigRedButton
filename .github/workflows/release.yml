@@ -99,9 +99,13 @@ jobs:
           if (!(Test-Path $iscc)) {
             $iscc = "iscc"
           }
+          $sourceDir = (Resolve-Path "dist\windows-amd64").Path
+          $outputDir = (Resolve-Path "dist").Path
+          $repoDir = (Resolve-Path ".").Path
           & $iscc `
-            "/DSourceDir=dist\windows-amd64" `
-            "/DOutputDir=dist" `
+            "/DSourceDir=$sourceDir" `
+            "/DOutputDir=$outputDir" `
+            "/DRepoDir=$repoDir" `
             "/DAppVersion=${{ env.VERSION }}" `
             "packaging/windows/BigRedButton.iss"
 

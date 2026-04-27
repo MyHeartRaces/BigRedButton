@@ -6,6 +6,10 @@
 #define OutputDir ".\dist"
 #endif
 
+#ifndef RepoDir
+#define RepoDir "..\.."
+#endif
+
 #ifndef AppVersion
 #define AppVersion "0.2.0"
 #endif
@@ -34,8 +38,8 @@ UninstallDisplayName=Big Red Button
 [Files]
 Source: "{#SourceDir}\big-red-button.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\big-red-button-gui.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Big Red Button"; Filename: "{app}\big-red-button-gui.exe"; WorkingDir: "{app}"
