@@ -62,6 +62,21 @@ make build
 
 The binary is written to `build/big-red-button`.
 
+## GitHub Releases
+
+Tagged releases are published to GitHub Releases:
+
+<https://github.com/MyHeartRaces/BigRedButton/releases>
+
+Release assets include Windows, macOS arm64, Arch Linux package, and
+`SHA256SUMS` files. Maintainers publish a release by pushing a `v*` tag, for
+example:
+
+```bash
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
 ## GitHub Actions Builds
 
 The repository includes `.github/workflows/build.yml`.
