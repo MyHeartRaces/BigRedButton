@@ -56,6 +56,7 @@ go test ./...
 go run ./cmd/tracegate-launcherctl validate-profile testdata/profiles/valid-v7.json
 go run ./cmd/tracegate-launcherctl plan-connect -endpoint-ip 203.0.113.10 testdata/profiles/valid-v7.json
 go run ./cmd/tracegate-launcherctl plan-disconnect
+go run ./cmd/tracegate-launcherctl linux-dry-run-connect -endpoint-ip 203.0.113.10 -default-gateway 192.0.2.1 -default-interface eth0 testdata/profiles/valid-v7.json
 ```
 
 Implemented so far:
@@ -72,6 +73,8 @@ Implemented so far:
 - Linux `ip route get` output parser for future helper integration
 - Linux `ip route` command builders for route exclusion apply/rollback
 - Linux read-only endpoint route discovery through an injectable command runner
+- Linux dry-run connect executor exposed through `tracegate-launcherctl`,
+  with optional read-only route discovery
 - redacted valid and invalid fixtures
 
 ## Repository Layout

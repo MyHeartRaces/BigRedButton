@@ -115,3 +115,49 @@ func TestPlanDisconnectCommand(t *testing.T) {
 		t.Fatalf("expected route cleanup step, got: %s", out)
 	}
 }
+
+func TestLinuxDryRunConnectCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-dry-run-connect",
+		"-endpoint-ip", "203.0.113.10",
+		"-default-gateway", "192.0.2.1",
+		"-default-interface", "eth0",
+		"../../testdata/profiles/valid-v7.json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"engine state: Connected",
+		"linux dry-run commands:",
+		"ip -4 route get 203.0.113.10",
+		"ip -4 route replace 203.0.113.10/32 via 192.0.2.1 dev eth0",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
+func TestLinuxDryRunConnectCommandFailsWithoutConcreteRouteExclusion(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-dry-run-connect",
+		"-endpoint-ip", "203.0.113.10",
+		"../../testdata/profiles/valid-v7.json",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "engine state: FailedRecoverable") {
+		t.Fatalf("expected failed recoverable state, got: %s", out)
+	}
+	if !strings.Contains(out, "route exclusion for endpoint 203.0.113.10 is not resolved") {
+		t.Fatalf("expected unresolved route exclusion error, got: %s", out)
+	}
+}

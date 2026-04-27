@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 
+	"github.com/tracegate/tracegate-launcher/internal/engine"
 	"github.com/tracegate/tracegate-launcher/internal/planner"
+	platformlinux "github.com/tracegate/tracegate-launcher/internal/platform/linux"
 	"github.com/tracegate/tracegate-launcher/internal/profile"
 )
 
@@ -28,6 +31,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return planConnect(args[1:], stdout, stderr)
 	case "plan-disconnect":
 		return planDisconnect(args[1:], stdout, stderr)
+	case "linux-dry-run-connect":
+		return linuxDryRunConnect(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return 0
@@ -98,12 +103,7 @@ func planConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs := flag.NewFlagSet("plan-connect", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	jsonOutput := fs.Bool("json", false, "print JSON output")
-	endpointIPs := fs.String("endpoint-ip", "", "comma-separated resolved WSTunnel endpoint IPs")
-	defaultGateway := fs.String("default-gateway", "", "pre-tunnel default gateway for route exclusion")
-	defaultInterface := fs.String("default-interface", "", "pre-tunnel default interface for route exclusion")
-	wstunnelBinary := fs.String("wstunnel-binary", "", "WSTunnel binary path/name")
-	wireguardInterface := fs.String("wireguard-interface", "", "WireGuard interface name")
-	runtimeRoot := fs.String("runtime-root", "", "launcher runtime state root")
+	options := planConnectFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -118,18 +118,74 @@ func planConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	plan, err := planner.Connect(config, planner.Options{
-		EndpointIPs:        csvOption(*endpointIPs),
-		DefaultGateway:     *defaultGateway,
-		DefaultInterface:   *defaultInterface,
-		WSTunnelBinary:     *wstunnelBinary,
-		WireGuardInterface: *wireguardInterface,
-		RuntimeRoot:        *runtimeRoot,
+		EndpointIPs:        csvOption(*options.endpointIPs),
+		DefaultGateway:     *options.defaultGateway,
+		DefaultInterface:   *options.defaultInterface,
+		WSTunnelBinary:     *options.wstunnelBinary,
+		WireGuardInterface: *options.wireguardInterface,
+		RuntimeRoot:        *options.runtimeRoot,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "build connect plan: %v\n", err)
 		return 1
 	}
 	printPlan(plan, *jsonOutput, stdout)
+	return 0
+}
+
+func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-dry-run-connect", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	discoverRoutes := fs.Bool("discover-routes", false, "run read-only Linux route discovery during dry-run")
+	options := planConnectFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-dry-run-connect [-json] [-discover-routes] [-endpoint-ip ip[,ip]] <profile.json>")
+		return 2
+	}
+
+	config, err := profile.LoadFile(fs.Arg(0))
+	if err != nil {
+		printProfileError(err, stderr, *jsonOutput, stdout)
+		return 1
+	}
+	plan, err := planner.Connect(config, planner.Options{
+		EndpointIPs:        csvOption(*options.endpointIPs),
+		DefaultGateway:     *options.defaultGateway,
+		DefaultInterface:   *options.defaultInterface,
+		WSTunnelBinary:     *options.wstunnelBinary,
+		WireGuardInterface: *options.wireguardInterface,
+		RuntimeRoot:        *options.runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build connect plan: %v\n", err)
+		return 1
+	}
+	executor, err := platformlinux.NewDryRunExecutorWithOptions(plan, platformlinux.DryRunOptions{
+		ReadOnlyDiscovery: *discoverRoutes,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build linux dry-run executor: %v\n", err)
+		return 1
+	}
+	result := engine.New(executor).Run(context.Background(), plan)
+	output := linuxDryRunOutput{
+		Plan:       plan,
+		Result:     result,
+		Operations: executor.Operations(),
+	}
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printPlan(plan, false, stdout)
+		printLinuxDryRun(output, stdout)
+	}
+	if result.State != engine.StateConnected {
+		return 1
+	}
 	return 0
 }
 
@@ -163,6 +219,32 @@ func writeJSON(w io.Writer, payload any) {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	_ = encoder.Encode(payload)
+}
+
+type connectFlagValues struct {
+	endpointIPs        *string
+	defaultGateway     *string
+	defaultInterface   *string
+	wstunnelBinary     *string
+	wireguardInterface *string
+	runtimeRoot        *string
+}
+
+type linuxDryRunOutput struct {
+	Plan       planner.Plan              `json:"plan"`
+	Result     engine.Result             `json:"result"`
+	Operations []platformlinux.Operation `json:"operations"`
+}
+
+func planConnectFlags(fs *flag.FlagSet) connectFlagValues {
+	return connectFlagValues{
+		endpointIPs:        fs.String("endpoint-ip", "", "comma-separated resolved WSTunnel endpoint IPs"),
+		defaultGateway:     fs.String("default-gateway", "", "pre-tunnel default gateway for route exclusion"),
+		defaultInterface:   fs.String("default-interface", "", "pre-tunnel default interface for route exclusion"),
+		wstunnelBinary:     fs.String("wstunnel-binary", "", "WSTunnel binary path/name"),
+		wireguardInterface: fs.String("wireguard-interface", "", "WireGuard interface name"),
+		runtimeRoot:        fs.String("runtime-root", "", "launcher runtime state root"),
+	}
 }
 
 func printProfileError(err error, stderr io.Writer, jsonOutput bool, stdout io.Writer) {
@@ -228,6 +310,21 @@ func printPlan(plan planner.Plan, jsonOutput bool, stdout io.Writer) {
 	}
 }
 
+func printLinuxDryRun(output linuxDryRunOutput, stdout io.Writer) {
+	fmt.Fprintf(stdout, "engine state: %s\n", output.Result.State)
+	if output.Result.Error != "" {
+		fmt.Fprintf(stdout, "engine error: %s\n", output.Result.Error)
+	}
+	if len(output.Operations) == 0 {
+		fmt.Fprintln(stdout, "linux dry-run commands: []")
+		return
+	}
+	fmt.Fprintln(stdout, "linux dry-run commands:")
+	for _, operation := range output.Operations {
+		fmt.Fprintf(stdout, "- %s %s: %s\n", operation.Phase, operation.StepID, operation.Command.String())
+	}
+}
+
 func csvOption(value string) []string {
 	if value == "" {
 		return nil
@@ -242,4 +339,5 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  validate-profile [-json] <profile.json>")
 	fmt.Fprintln(w, "  plan-connect [-json] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  plan-disconnect [-json]")
+	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-endpoint-ip ip[,ip]] <profile.json>")
 }
