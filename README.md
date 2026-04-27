@@ -75,6 +75,7 @@ Implemented so far:
 - Linux read-only endpoint route discovery through an injectable command runner
 - Linux dry-run connect executor exposed through `tracegate-launcherctl`,
   with optional read-only route discovery
+- secret-free runtime state model and file store for future disconnect/rollback
 - redacted valid and invalid fixtures
 
 ## Repository Layout
