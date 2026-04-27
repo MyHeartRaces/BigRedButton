@@ -9,7 +9,7 @@ Date: 2026-04-25
 - fix the first implementation stack
 - record the development plan and quality gates
 - define the V7 profile schema consumed by the launcher
-- scaffold the Go module and Wails v2 UI shell
+- scaffold the Go module and desktop GUI shell
 - add a headless `big-red-button` path before relying on the UI
 
 ## Phase 1: Linux MVP

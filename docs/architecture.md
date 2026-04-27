@@ -33,8 +33,8 @@ operations belong in the helper.
 Accepted stack:
 
 - Go for core logic, privileged helper, CLI tooling and networking adapters
-- Wails v2 for the desktop shell
-- TypeScript + Svelte for the small UI
+- Go standard-library desktop web launcher for the first GUI MVP
+- embedded HTML/CSS/JavaScript for the small UI
 - bundled `wstunnel` binary per target platform
 - platform-specific WireGuard, route and DNS adapters
 
@@ -56,7 +56,7 @@ tests.
 
 ## Deliverables
 
-- `big-red-button`: Wails desktop UI.
+- `big-red-button-gui`: desktop GUI launcher.
 - `big-red-buttond`: privileged Go helper / daemon.
 - `big-red-button`: Go CLI for development, diagnostics and headless
   tests.

@@ -15,7 +15,7 @@ is a reliable headless lifecycle:
 load profile -> validate -> plan changes -> connect -> status -> disconnect -> cleanup
 ```
 
-The Wails UI should call the same helper API that the CLI uses. Do not create a
+The desktop UI should call the same helper API that the CLI uses. Do not create a
 separate UI-only connect path.
 
 ## Codebase Shape
@@ -41,7 +41,7 @@ internal/
     darwin/                    # stubs until macOS phase
 testdata/
   profiles/                    # redacted V7 fixtures
-frontend/                      # Wails + Svelte UI, added after CLI lifecycle
+frontend/                      # embedded desktop web UI, added after CLI lifecycle
 ```
 
 The exact package names can change, but the separation must remain:
@@ -165,7 +165,7 @@ Exit criteria:
 - privileged tests require an explicit environment flag
 - manual smoke test has a repeatable command sequence
 
-## Step 5: Minimal Wails UI
+## Step 5: Minimal desktop UI
 
 Add UI only after the CLI lifecycle works.
 

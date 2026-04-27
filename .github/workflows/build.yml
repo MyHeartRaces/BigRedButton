@@ -13,6 +13,8 @@ permissions:
 env:
   GO_VERSION: 1.24.x
   BINARY_NAME: big-red-button
+  GUI_BINARY_NAME: big-red-button-gui
+  VERSION: 0.2.0
 
 jobs:
   windows-11-arm64:
@@ -39,12 +41,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path "dist/windows-arm64" | Out-Null
           $env:CGO_ENABLED = "0"
           go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/windows-arm64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+          go build -trimpath -buildvcs=false -ldflags "-s -w -H windowsgui" -o "dist/windows-arm64/${{ env.GUI_BINARY_NAME }}.exe" "./cmd/${{ env.GUI_BINARY_NAME }}"
 
       - name: Package
         shell: pwsh
         run: |
           Compress-Archive `
-            -Path "dist/windows-arm64/${{ env.BINARY_NAME }}.exe", "README.md", "LICENSE" `
+            -Path "dist/windows-arm64/${{ env.BINARY_NAME }}.exe", "dist/windows-arm64/${{ env.GUI_BINARY_NAME }}.exe", "README.md", "LICENSE" `
             -DestinationPath "dist/${{ env.BINARY_NAME }}_windows_11_arm64.zip" `
             -Force
 
@@ -81,12 +84,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path "dist/windows-amd64" | Out-Null
           $env:CGO_ENABLED = "0"
           go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/windows-amd64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+          go build -trimpath -buildvcs=false -ldflags "-s -w -H windowsgui" -o "dist/windows-amd64/${{ env.GUI_BINARY_NAME }}.exe" "./cmd/${{ env.GUI_BINARY_NAME }}"
 
       - name: Package
         shell: pwsh
         run: |
           Compress-Archive `
-            -Path "dist/windows-amd64/${{ env.BINARY_NAME }}.exe", "README.md", "LICENSE" `
+            -Path "dist/windows-amd64/${{ env.BINARY_NAME }}.exe", "dist/windows-amd64/${{ env.GUI_BINARY_NAME }}.exe", "README.md", "LICENSE" `
             -DestinationPath "dist/${{ env.BINARY_NAME }}_windows_amd64.zip" `
             -Force
 
@@ -114,24 +118,17 @@ jobs:
       - name: Test
         run: go test ./...
 
-      - name: Build
+      - name: Build package
         run: |
-          mkdir -p dist/macos-arm64
-          CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/macos-arm64/${BINARY_NAME}" "./cmd/${BINARY_NAME}"
-
-      - name: Package
-        run: |
-          mkdir -p "dist/package/${BINARY_NAME}_darwin_arm64"
-          cp "dist/macos-arm64/${BINARY_NAME}" "dist/package/${BINARY_NAME}_darwin_arm64/${BINARY_NAME}"
-          cp README.md LICENSE "dist/package/${BINARY_NAME}_darwin_arm64/"
-          tar -C dist/package -czf "dist/${BINARY_NAME}_darwin_arm64.tar.gz" "${BINARY_NAME}_darwin_arm64"
-          tar -tzf "dist/${BINARY_NAME}_darwin_arm64.tar.gz" >/dev/null
+          VERSION="${VERSION}" ./scripts/build-macos-package.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}_darwin_arm64
-          path: dist/${{ env.BINARY_NAME }}_darwin_arm64.tar.gz
+          path: |
+            dist/macos/${{ env.BINARY_NAME }}_darwin_arm64.pkg
+            dist/macos/${{ env.BINARY_NAME }}_darwin_arm64_app.zip
           if-no-files-found: error
 
   arch-linux:

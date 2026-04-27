@@ -12,8 +12,8 @@ The fixed stack is:
 
 - Go for the operational core, privileged helper, process supervision,
   platform networking adapters and CLI tooling
-- Wails v2 for the desktop shell
-- TypeScript + Svelte for the UI
+- Go standard-library desktop web launcher for the first GUI MVP
+- packaged OS launchers/installers for click-to-run distribution
 - upstream `wstunnel` as a bundled external binary
 - platform-native shims only when the OS integration cannot be owned cleanly in
   Go
@@ -41,9 +41,11 @@ The UI is intentionally small and should remain replaceable.
 
 Default UI stack:
 
-- Wails v2
-- TypeScript
-- Svelte
+- `big-red-button-gui`, a Go binary that starts a localhost UI and opens the
+  default browser
+- static embedded HTML/CSS/JavaScript
+- OS package shortcuts: `.desktop` on Linux, `.app`/`.pkg` on macOS and an
+  installer shortcut on Windows
 
 The UI owns:
 
@@ -59,7 +61,7 @@ Administrator during normal use.
 
 The application is split into three deliverables:
 
-- `big-red-button`: desktop UI
+- `big-red-button-gui`: desktop UI launcher
 - `big-red-buttond`: privileged helper / daemon
 - `big-red-button`: CLI for development, diagnostics and headless tests
 
@@ -121,4 +123,3 @@ Do not assume Linux route and DNS behavior will carry over unchanged.
 - no C++ full application rewrite unless Go becomes a proven blocker
 - no custom WireGuard implementation
 - no custom WSTunnel implementation
-

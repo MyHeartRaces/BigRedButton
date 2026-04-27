@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Big Red Button">
+  <rect width="256" height="256" rx="48" fill="#171a20"/>
+  <circle cx="128" cy="128" r="84" fill="#7f1d1d"/>
+  <circle cx="128" cy="112" r="62" fill="#e53935"/>
+  <path d="M76 108c12-28 38-44 76-43 15 1 27 5 36 12-15-19-36-29-63-29-39 0-70 24-82 58-11 30 1 64 29 83-12-22-11-50 4-81z" fill="#ff6b66" opacity=".58"/>
+  <path d="M64 159c19 37 61 53 101 36 25-11 43-34 49-61-3 40-30 72-68 82-43 11-87-12-103-53z" fill="#4a0f0f" opacity=".72"/>
+</svg>

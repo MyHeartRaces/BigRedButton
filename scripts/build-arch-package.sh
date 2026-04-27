@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pkgname="big-red-button"
-pkgver="${PKGVER:-0.1.0}"
+pkgver="${PKGVER:-0.2.0}"
 workdir="${repo_root}/dist/arch/makepkg"
 src_tar="${workdir}/${pkgname}-${pkgver}.tar.gz"
 

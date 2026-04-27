@@ -1,13 +1,13 @@
 # Maintainer: Big Red Button contributors
 pkgname=big-red-button
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
-pkgdesc='Headless Linux client for WireGuard over WSTunnel'
+pkgdesc='Desktop launcher for WireGuard over WSTunnel'
 arch=('x86_64' 'aarch64')
 url='https://github.com/MyHeartRaces/BigRedButton'
 license=('MIT')
 options=('!debug')
-depends=('iproute2' 'wireguard-tools')
+depends=('iproute2' 'polkit' 'wireguard-tools' 'xdg-utils')
 makedepends=('go')
 optdepends=('wstunnel: WSTunnel client binary required for real connections')
 source=("${pkgname}-${pkgver}.tar.gz")
@@ -22,6 +22,10 @@ build() {
     -ldflags "-s -w" \
     -o "build/${pkgname}" \
     "./cmd/${pkgname}"
+  go build \
+    -ldflags "-s -w" \
+    -o "build/${pkgname}-gui" \
+    "./cmd/${pkgname}-gui"
 }
 
 check() {
@@ -34,6 +38,9 @@ package() {
   cd "${srcdir}/${pkgname}-${pkgver}"
 
   install -Dm755 "build/${pkgname}" "${pkgdir}/usr/bin/${pkgname}"
+  install -Dm755 "build/${pkgname}-gui" "${pkgdir}/usr/bin/${pkgname}-gui"
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
   install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+  install -Dm644 "packaging/linux/${pkgname}.desktop" "${pkgdir}/usr/share/applications/${pkgname}.desktop"
+  install -Dm644 "packaging/assets/${pkgname}.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${pkgname}.svg"
 }

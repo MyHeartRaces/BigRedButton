@@ -1,11 +1,11 @@
 # Big Red Button
 
-Big Red Button is a headless Linux client for a single V7 profile:
+Big Red Button is a desktop launcher and CLI for a single V7 profile:
 WireGuard over WSTunnel.
 
 The current build is intended for early Linux testing. It provides a CLI,
-runtime state, Linux route handling, WSTunnel process supervision, and
-WireGuard setup/rollback primitives. The desktop UI is not implemented yet.
+desktop GUI, runtime state, Linux route handling, WSTunnel process supervision,
+and WireGuard setup/rollback primitives.
 
 ## Status
 
@@ -24,11 +24,13 @@ Implemented:
 - WireGuard `wg setconf` renderer and Linux executor
 - composite Linux lifecycle executor with rollback tests
 - guarded Linux connect/disconnect CLI commands
-- Arch Linux package build files
+- desktop GUI launcher
+- Arch Linux application launcher package
+- macOS `.pkg` installer with an app bundle
+- Windows amd64 installer with Start Menu/Desktop shortcuts
 
 Not implemented yet:
 
-- desktop UI
 - privileged daemon / IPC boundary
 - DNS adapter
 - kill switch
@@ -58,9 +60,22 @@ repositories.
 make test
 make build
 ./build/big-red-button help
+./build/big-red-button-gui -addr 127.0.0.1:0 -no-open
 ```
 
-The binary is written to `build/big-red-button`.
+The binaries are written to `build/big-red-button` and
+`build/big-red-button-gui`.
+
+## Desktop GUI
+
+`big-red-button-gui` starts a local desktop web UI and opens it in the default
+browser. It can save a V7 profile, show redacted profile details, show runtime
+status, and on Linux run guarded connect/disconnect commands through the CLI.
+
+On Linux the GUI uses `pkexec` when available, so desktop environments can show
+a graphical privilege prompt. On macOS and Windows the GUI starts normally, but
+real connect/disconnect remains unavailable until those platform adapters are
+implemented.
 
 ## GitHub Releases
 
@@ -73,8 +88,8 @@ Release assets include Windows, macOS arm64, Arch Linux package, and
 example:
 
 ```bash
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin v0.1.0
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
 ```
 
 ## GitHub Actions Builds
@@ -85,7 +100,9 @@ It builds and uploads artifacts for:
 
 - Windows 11 arm64: `big-red-button_windows_11_arm64.zip`
 - Windows amd64 compatible: `big-red-button_windows_amd64.zip`
-- macOS arm64: `big-red-button_darwin_arm64.tar.gz`
+- Windows amd64 installer: `BigRedButtonSetup-*-windows-amd64.exe`
+- macOS arm64 installer: `big-red-button_darwin_arm64.pkg`
+- macOS arm64 app bundle ZIP: `big-red-button_darwin_arm64_app.zip`
 - Arch Linux package: `big-red-button-*.pkg.tar.*`
 
 The Windows amd64 job runs on GitHub's hosted Windows Server runner because
@@ -105,6 +122,9 @@ sudo pacman -U dist/arch/makepkg/big-red-button-*.pkg.tar.zst
 The package installs:
 
 - `/usr/bin/big-red-button`
+- `/usr/bin/big-red-button-gui`
+- `/usr/share/applications/big-red-button.desktop`
+- `/usr/share/icons/hicolor/scalable/apps/big-red-button.svg`
 - `/usr/share/licenses/big-red-button/LICENSE`
 - `/usr/share/doc/big-red-button/README.md`
 

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Big Red Button
+Comment=WireGuard over WSTunnel launcher
+Exec=big-red-button-gui
+Icon=big-red-button
+Terminal=false
+Categories=Network;Security;

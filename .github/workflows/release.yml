@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag, for example v0.1.0"
+        description: "Release tag, for example v0.2.0"
         required: true
-        default: "v0.1.0"
+        default: "v0.2.0"
 
 permissions:
   contents: write
@@ -17,6 +17,8 @@ permissions:
 env:
   GO_VERSION: 1.24.x
   BINARY_NAME: big-red-button
+  GUI_BINARY_NAME: big-red-button-gui
+  VERSION: 0.2.0
 
 jobs:
   windows-11-arm64:
@@ -43,12 +45,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path "dist/windows-arm64" | Out-Null
           $env:CGO_ENABLED = "0"
           go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/windows-arm64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+          go build -trimpath -buildvcs=false -ldflags "-s -w -H windowsgui" -o "dist/windows-arm64/${{ env.GUI_BINARY_NAME }}.exe" "./cmd/${{ env.GUI_BINARY_NAME }}"
 
       - name: Package
         shell: pwsh
         run: |
           Compress-Archive `
-            -Path "dist/windows-arm64/${{ env.BINARY_NAME }}.exe", "README.md", "LICENSE" `
+            -Path "dist/windows-arm64/${{ env.BINARY_NAME }}.exe", "dist/windows-arm64/${{ env.GUI_BINARY_NAME }}.exe", "README.md", "LICENSE" `
             -DestinationPath "dist/${{ env.BINARY_NAME }}_windows_11_arm64.zip" `
             -Force
 
@@ -83,12 +86,30 @@ jobs:
           New-Item -ItemType Directory -Force -Path "dist/windows-amd64" | Out-Null
           $env:CGO_ENABLED = "0"
           go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/windows-amd64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+          go build -trimpath -buildvcs=false -ldflags "-s -w -H windowsgui" -o "dist/windows-amd64/${{ env.GUI_BINARY_NAME }}.exe" "./cmd/${{ env.GUI_BINARY_NAME }}"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            $iscc = "iscc"
+          }
+          & $iscc `
+            "/DSourceDir=dist\windows-amd64" `
+            "/DOutputDir=dist" `
+            "/DAppVersion=${{ env.VERSION }}" `
+            "packaging/windows/BigRedButton.iss"
 
       - name: Package
         shell: pwsh
         run: |
           Compress-Archive `
-            -Path "dist/windows-amd64/${{ env.BINARY_NAME }}.exe", "README.md", "LICENSE" `
+            -Path "dist/windows-amd64/${{ env.BINARY_NAME }}.exe", "dist/windows-amd64/${{ env.GUI_BINARY_NAME }}.exe", "README.md", "LICENSE" `
             -DestinationPath "dist/${{ env.BINARY_NAME }}_windows_amd64.zip" `
             -Force
 
@@ -96,7 +117,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}_windows_amd64
-          path: dist/${{ env.BINARY_NAME }}_windows_amd64.zip
+          path: |
+            dist/${{ env.BINARY_NAME }}_windows_amd64.zip
+            dist/BigRedButtonSetup-${{ env.VERSION }}-windows-amd64.exe
           if-no-files-found: error
 
   macos-arm64:
@@ -116,24 +139,17 @@ jobs:
       - name: Test
         run: go test ./...
 
-      - name: Build
+      - name: Build package
         run: |
-          mkdir -p dist/macos-arm64
-          CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/macos-arm64/${BINARY_NAME}" "./cmd/${BINARY_NAME}"
-
-      - name: Package
-        run: |
-          mkdir -p "dist/package/${BINARY_NAME}_darwin_arm64"
-          cp "dist/macos-arm64/${BINARY_NAME}" "dist/package/${BINARY_NAME}_darwin_arm64/${BINARY_NAME}"
-          cp README.md LICENSE "dist/package/${BINARY_NAME}_darwin_arm64/"
-          tar -C dist/package -czf "dist/${BINARY_NAME}_darwin_arm64.tar.gz" "${BINARY_NAME}_darwin_arm64"
-          tar -tzf "dist/${BINARY_NAME}_darwin_arm64.tar.gz" >/dev/null
+          VERSION="${VERSION}" ./scripts/build-macos-package.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}_darwin_arm64
-          path: dist/${{ env.BINARY_NAME }}_darwin_arm64.tar.gz
+          path: |
+            dist/macos/${{ env.BINARY_NAME }}_darwin_arm64.pkg
+            dist/macos/${{ env.BINARY_NAME }}_darwin_arm64_app.zip
           if-no-files-found: error
 
   arch-linux:
@@ -211,9 +227,11 @@ jobs:
           Alpha release for early testing.
 
           Assets:
+          - Windows amd64 installer
           - Windows 11 arm64 ZIP
           - Windows amd64 ZIP
-          - macOS arm64 tarball
+          - macOS arm64 installer package
+          - macOS arm64 app ZIP
           - Arch Linux package
           - SHA256SUMS
           EOF

@@ -28,8 +28,8 @@ disconnect and clean up only launcher-owned state
 user session
 
 +----------------------+       +----------------------+
-| big-red-button   |       | big-red-button|
-| Wails one-button UI  |       | CLI / diagnostics    |
+| big-red-button-gui   |       | big-red-button       |
+| desktop web UI       |       | CLI / diagnostics    |
 +----------+-----------+       +----------+-----------+
            | local IPC                    | local IPC
            +---------------+--------------+
@@ -54,9 +54,9 @@ operations.
 
 ## Deliverables
 
-### `big-red-button`
+### `big-red-button-gui`
 
-Desktop UI built with Wails v2, TypeScript and Svelte.
+Desktop UI launcher built in Go with embedded HTML/CSS/JavaScript.
 
 Responsibilities:
 
@@ -64,7 +64,8 @@ Responsibilities:
 - expose Connect / Disconnect
 - display current status
 - display last failure
-- call helper API over local IPC
+- call helper API over local IPC when the helper exists
+- call the guarded Linux CLI through `pkexec` during the first GUI MVP
 
 Non-responsibilities:
 
@@ -406,4 +407,4 @@ Implement in this order:
 7. WSTunnel supervisor.
 8. Linux WireGuard adapter.
 9. Helper IPC.
-10. Minimal Wails UI.
+10. Minimal desktop UI.

@@ -1,6 +1,6 @@
 pkgbase = big-red-button
-	pkgdesc = Headless Linux client for WireGuard over WSTunnel
-	pkgver = 0.1.0
+	pkgdesc = Desktop launcher for WireGuard over WSTunnel
+	pkgver = 0.2.0
 	pkgrel = 1
 	url = https://github.com/MyHeartRaces/BigRedButton
 	arch = x86_64
@@ -9,9 +9,11 @@ pkgbase = big-red-button
 	options = !debug
 	makedepends = go
 	depends = iproute2
+	depends = polkit
 	depends = wireguard-tools
+	depends = xdg-utils
 	optdepends = wstunnel: WSTunnel client binary required for real connections
-	source = big-red-button-0.1.0.tar.gz
+	source = big-red-button-0.2.0.tar.gz
 	sha256sums = SKIP
 
 pkgname = big-red-button
