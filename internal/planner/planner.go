@@ -5,8 +5,8 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/tracegate/big-red-button/internal/profile"
-	"github.com/tracegate/big-red-button/internal/routes"
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
+	"github.com/MyHeartRaces/BigRedButton/internal/routes"
 )
 
 const (

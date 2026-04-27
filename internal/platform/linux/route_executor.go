@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tracegate/big-red-button/internal/planner"
-	"github.com/tracegate/big-red-button/internal/routes"
-	truntime "github.com/tracegate/big-red-button/internal/runtime"
+	"github.com/MyHeartRaces/BigRedButton/internal/planner"
+	"github.com/MyHeartRaces/BigRedButton/internal/routes"
+	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
 )
 
 var ErrUnsupportedRouteStep = errors.New("unsupported linux route executor step")

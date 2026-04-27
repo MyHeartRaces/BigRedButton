@@ -9,13 +9,13 @@ import (
 	"os"
 	stdruntime "runtime"
 
-	"github.com/tracegate/big-red-button/internal/engine"
-	"github.com/tracegate/big-red-button/internal/planner"
-	platformlinux "github.com/tracegate/big-red-button/internal/platform/linux"
-	"github.com/tracegate/big-red-button/internal/profile"
-	truntime "github.com/tracegate/big-red-button/internal/runtime"
-	"github.com/tracegate/big-red-button/internal/status"
-	"github.com/tracegate/big-red-button/internal/supervisor"
+	"github.com/MyHeartRaces/BigRedButton/internal/engine"
+	"github.com/MyHeartRaces/BigRedButton/internal/planner"
+	platformlinux "github.com/MyHeartRaces/BigRedButton/internal/platform/linux"
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
+	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
+	"github.com/MyHeartRaces/BigRedButton/internal/status"
+	"github.com/MyHeartRaces/BigRedButton/internal/supervisor"
 )
 
 var currentGOOS = stdruntime.GOOS

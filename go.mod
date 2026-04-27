@@ -1,3 +1,3 @@
-module github.com/tracegate/big-red-button
+module github.com/MyHeartRaces/BigRedButton
 
 go 1.24

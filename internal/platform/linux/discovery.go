@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/tracegate/big-red-button/internal/routes"
+	"github.com/MyHeartRaces/BigRedButton/internal/routes"
 )
 
 type CommandRunner interface {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tracegate/big-red-button/internal/profile"
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
 )
 
 func TestRenderSetConf(t *testing.T) {

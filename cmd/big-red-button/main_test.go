@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	truntime "github.com/tracegate/big-red-button/internal/runtime"
+	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
 )
 
 func TestValidateProfileCommand(t *testing.T) {

@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tracegate/big-red-button/internal/engine"
-	"github.com/tracegate/big-red-button/internal/planner"
-	"github.com/tracegate/big-red-button/internal/profile"
-	"github.com/tracegate/big-red-button/internal/routes"
-	truntime "github.com/tracegate/big-red-button/internal/runtime"
-	"github.com/tracegate/big-red-button/internal/supervisor"
+	"github.com/MyHeartRaces/BigRedButton/internal/engine"
+	"github.com/MyHeartRaces/BigRedButton/internal/planner"
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
+	"github.com/MyHeartRaces/BigRedButton/internal/routes"
+	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
+	"github.com/MyHeartRaces/BigRedButton/internal/supervisor"
 )
 
 func TestLifecycleExecutorRunsConnectPlan(t *testing.T) {

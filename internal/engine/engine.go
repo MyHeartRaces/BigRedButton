@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tracegate/big-red-button/internal/planner"
+	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 )
 
 type State string

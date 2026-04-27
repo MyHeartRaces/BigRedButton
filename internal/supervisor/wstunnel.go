@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tracegate/big-red-button/internal/profile"
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
 )
 
 const (

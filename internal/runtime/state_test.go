@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tracegate/big-red-button/internal/planner"
-	"github.com/tracegate/big-red-button/internal/profile"
+	"github.com/MyHeartRaces/BigRedButton/internal/planner"
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
 )
 
 func TestNewStateFromConnectPlanIsSecretFree(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tracegate/big-red-button/internal/planner"
-	"github.com/tracegate/big-red-button/internal/wireguard"
+	"github.com/MyHeartRaces/BigRedButton/internal/planner"
+	"github.com/MyHeartRaces/BigRedButton/internal/wireguard"
 )
 
 var ErrUnsupportedWireGuardStep = errors.New("unsupported linux wireguard executor step")

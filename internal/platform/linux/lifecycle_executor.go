@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tracegate/big-red-button/internal/planner"
-	"github.com/tracegate/big-red-button/internal/profile"
-	"github.com/tracegate/big-red-button/internal/supervisor"
-	"github.com/tracegate/big-red-button/internal/wireguard"
+	"github.com/MyHeartRaces/BigRedButton/internal/planner"
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
+	"github.com/MyHeartRaces/BigRedButton/internal/supervisor"
+	"github.com/MyHeartRaces/BigRedButton/internal/wireguard"
 )
 
 type LifecycleExecutor struct {

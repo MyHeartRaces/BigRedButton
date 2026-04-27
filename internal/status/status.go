@@ -5,7 +5,7 @@ import (
 	"errors"
 	"os"
 
-	truntime "github.com/tracegate/big-red-button/internal/runtime"
+	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
 )
 
 type State string
