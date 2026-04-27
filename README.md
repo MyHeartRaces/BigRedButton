@@ -67,6 +67,7 @@ Implemented so far:
 - `tracegate-launcherctl plan-connect`
 - `tracegate-launcherctl plan-disconnect`
 - secret-free dry-run connect/disconnect plans
+- lifecycle engine with fake-executor rollback tests
 - redacted valid and invalid fixtures
 
 ## Repository Layout
