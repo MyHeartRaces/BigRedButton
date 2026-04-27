@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tracegate/tracegate-launcher/internal/engine"
-	"github.com/tracegate/tracegate-launcher/internal/planner"
-	"github.com/tracegate/tracegate-launcher/internal/profile"
-	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
+	"github.com/tracegate/big-red-button/internal/engine"
+	"github.com/tracegate/big-red-button/internal/planner"
+	"github.com/tracegate/big-red-button/internal/profile"
+	truntime "github.com/tracegate/big-red-button/internal/runtime"
 )
 
 func TestDryRunExecutorRecordsConcreteRouteCommands(t *testing.T) {

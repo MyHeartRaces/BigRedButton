@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tracegate/tracegate-launcher/internal/profile"
+	"github.com/tracegate/big-red-button/internal/profile"
 )
 
 func TestWSTunnelClientCommandFromProfile(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"os"
 
-	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
+	truntime "github.com/tracegate/big-red-button/internal/runtime"
 )
 
 type State string

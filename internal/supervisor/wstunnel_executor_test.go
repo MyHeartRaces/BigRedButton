@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tracegate/tracegate-launcher/internal/planner"
+	"github.com/tracegate/big-red-button/internal/planner"
 )
 
 func TestWSTunnelExecutorStartsAndRollsBackProcess(t *testing.T) {

@@ -6,7 +6,7 @@ Status: accepted baseline
 
 ## Purpose
 
-Tracegate Launcher is a desktop launcher for one Tracegate V7 profile:
+Big Red Button is a desktop launcher for one Tracegate V7 profile:
 WireGuard over WSTunnel.
 
 The application does not implement WireGuard or WSTunnel. It owns the reliable
@@ -28,7 +28,7 @@ disconnect and clean up only launcher-owned state
 user session
 
 +----------------------+       +----------------------+
-| tracegate-launcher   |       | tracegate-launcherctl|
+| big-red-button   |       | big-red-button|
 | Wails one-button UI  |       | CLI / diagnostics    |
 +----------+-----------+       +----------+-----------+
            | local IPC                    | local IPC
@@ -37,7 +37,7 @@ user session
                  privileged boundary
                            |
                  +---------v----------+
-                 | tracegate-launcherd|
+                 | big-red-buttond|
                  | Go helper / daemon |
                  +----+----------+----+
                       |          |
@@ -54,7 +54,7 @@ operations.
 
 ## Deliverables
 
-### `tracegate-launcher`
+### `big-red-button`
 
 Desktop UI built with Wails v2, TypeScript and Svelte.
 
@@ -73,7 +73,7 @@ Non-responsibilities:
 - no WSTunnel process ownership
 - no root / Administrator runtime
 
-### `tracegate-launcherd`
+### `big-red-buttond`
 
 Privileged Go helper / daemon.
 
@@ -90,7 +90,7 @@ Responsibilities:
 
 The helper is the only component allowed to mutate system networking.
 
-### `tracegate-launcherctl`
+### `big-red-button`
 
 Go CLI for development, diagnostics and headless testing.
 
@@ -161,7 +161,7 @@ helper should not accept arbitrary user file paths as privileged input.
 
 Linux MVP IPC:
 
-- Unix domain socket under `/run/tracegate-launcher/launcher.sock`
+- Unix domain socket under `/run/big-red-button/launcher.sock`
 - helper-owned socket permissions
 - request/response protocol in JSON for early development
 - versioned message envelope
@@ -182,7 +182,7 @@ Future platform mapping:
 
 ## Runtime State
 
-The helper stores volatile runtime state under `/run/tracegate-launcher`.
+The helper stores volatile runtime state under `/run/big-red-button`.
 
 State should include:
 
@@ -268,7 +268,7 @@ The helper executes disconnect in this order:
 7. Clear runtime state.
 8. Return `Idle`.
 
-Cleanup must remove only state created by Tracegate Launcher.
+Cleanup must remove only state created by Big Red Button.
 
 ## WSTunnel Supervision
 
@@ -399,7 +399,7 @@ Implement in this order:
 
 1. Go module and package skeleton.
 2. V7 profile model, validation and redaction.
-3. `tracegate-launcherctl validate-profile`.
+3. `big-red-button validate-profile`.
 4. Planner and dry-run connect/disconnect output.
 5. Fake platform adapter tests for rollback.
 6. Linux route planner and endpoint exclusion.

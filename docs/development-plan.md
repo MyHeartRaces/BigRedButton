@@ -24,8 +24,8 @@ Initial Go layout:
 
 ```text
 cmd/
-  tracegate-launcherctl/       # CLI for development, diagnostics and tests
-  tracegate-launcherd/         # privileged helper / daemon
+  big-red-button/       # CLI for development, diagnostics and tests
+  big-red-buttond/         # privileged helper / daemon
 internal/
   profile/                     # V7 profile parsing, validation, redaction
   engine/                      # connect/disconnect state machine
@@ -138,9 +138,9 @@ Required behavior:
 
 Exit criteria:
 
-- `tracegate-launcherctl connect --profile <path>` works on Linux
-- `tracegate-launcherctl status` reports connected/disconnected/failure
-- `tracegate-launcherctl disconnect` restores the previous route state
+- `big-red-button connect --profile <path>` works on Linux
+- `big-red-button status` reports connected/disconnected/failure
+- `big-red-button disconnect` restores the previous route state
 - failures do not leave an orphaned WSTunnel process
 - failures do not leave stale launcher-owned routes
 
@@ -176,7 +176,7 @@ UI scope:
 - show current state
 - show last error
 
-The UI talks to `tracegate-launcherd` over local IPC. It must not call route,
+The UI talks to `big-red-buttond` over local IPC. It must not call route,
 WireGuard or process-management code directly.
 
 Exit criteria:
@@ -191,8 +191,8 @@ Package only after lifecycle and UI are stable.
 
 Linux packaging scope:
 
-- install `tracegate-launcher`
-- install `tracegate-launcherd`
+- install `big-red-button`
+- install `big-red-buttond`
 - install or locate bundled `wstunnel`
 - set up helper privileges through the chosen model
 - provide uninstall cleanup

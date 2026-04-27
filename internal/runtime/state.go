@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tracegate/tracegate-launcher/internal/planner"
-	"github.com/tracegate/tracegate-launcher/internal/routes"
+	"github.com/tracegate/big-red-button/internal/planner"
+	"github.com/tracegate/big-red-button/internal/routes"
 )
 
 const (

@@ -9,13 +9,13 @@ import (
 	"os"
 	stdruntime "runtime"
 
-	"github.com/tracegate/tracegate-launcher/internal/engine"
-	"github.com/tracegate/tracegate-launcher/internal/planner"
-	platformlinux "github.com/tracegate/tracegate-launcher/internal/platform/linux"
-	"github.com/tracegate/tracegate-launcher/internal/profile"
-	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
-	"github.com/tracegate/tracegate-launcher/internal/status"
-	"github.com/tracegate/tracegate-launcher/internal/supervisor"
+	"github.com/tracegate/big-red-button/internal/engine"
+	"github.com/tracegate/big-red-button/internal/planner"
+	platformlinux "github.com/tracegate/big-red-button/internal/platform/linux"
+	"github.com/tracegate/big-red-button/internal/profile"
+	truntime "github.com/tracegate/big-red-button/internal/runtime"
+	"github.com/tracegate/big-red-button/internal/status"
+	"github.com/tracegate/big-red-button/internal/supervisor"
 )
 
 var currentGOOS = stdruntime.GOOS
@@ -65,7 +65,7 @@ func validateProfile(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: tracegate-launcherctl validate-profile [-json] <profile.json>")
+		fmt.Fprintln(stderr, "usage: big-red-button validate-profile [-json] <profile.json>")
 		return 2
 	}
 
@@ -122,7 +122,7 @@ func planConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: tracegate-launcherctl plan-connect [-json] [-endpoint-ip ip[,ip]] <profile.json>")
+		fmt.Fprintln(stderr, "usage: big-red-button plan-connect [-json] [-endpoint-ip ip[,ip]] <profile.json>")
 		return 2
 	}
 
@@ -156,7 +156,7 @@ func printStatus(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "usage: tracegate-launcherctl status [-json] [-runtime-root path]")
+		fmt.Fprintln(stderr, "usage: big-red-button status [-json] [-runtime-root path]")
 		return 2
 	}
 
@@ -192,7 +192,7 @@ func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
 		return 2
 	}
 
@@ -251,7 +251,7 @@ func linuxDryRunDisconnect(args []string, stdout io.Writer, stderr io.Writer) in
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
 		return 2
 	}
 
@@ -299,7 +299,7 @@ func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")
 		return 2
 	}
 	if !*confirmed {
@@ -374,7 +374,7 @@ func linuxDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-disconnect -yes [-json] [-runtime-root path] <profile.json>")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-disconnect -yes [-json] [-runtime-root path] <profile.json>")
 		return 2
 	}
 	if !*confirmed {
@@ -439,7 +439,7 @@ func planDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "usage: tracegate-launcherctl plan-disconnect [-json]")
+		fmt.Fprintln(stderr, "usage: big-red-button plan-disconnect [-json]")
 		return 2
 	}
 
@@ -634,7 +634,7 @@ func csvOption(value string) []string {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "usage: tracegate-launcherctl <command> [args]")
+	fmt.Fprintln(w, "usage: big-red-button <command> [args]")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "commands:")
 	fmt.Fprintln(w, "  validate-profile [-json] <profile.json>")

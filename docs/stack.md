@@ -6,7 +6,7 @@ Status: accepted
 
 ## Decision
 
-Tracegate Launcher uses Go as the main operational language.
+Big Red Button uses Go as the main operational language.
 
 The fixed stack is:
 
@@ -20,7 +20,7 @@ The fixed stack is:
 
 ## Why Go
 
-The hard part of Tracegate Launcher is operational control, not UI complexity.
+The hard part of Big Red Button is operational control, not UI complexity.
 The client must manage privileged networking, child processes, route cleanup,
 WireGuard state and diagnostics. Go is a better default than C++ for the first
 implementation because it gives:
@@ -59,9 +59,9 @@ Administrator during normal use.
 
 The application is split into three deliverables:
 
-- `tracegate-launcher`: desktop UI
-- `tracegate-launcherd`: privileged helper / daemon
-- `tracegate-launcherctl`: CLI for development, diagnostics and headless tests
+- `big-red-button`: desktop UI
+- `big-red-buttond`: privileged helper / daemon
+- `big-red-button`: CLI for development, diagnostics and headless tests
 
 The UI talks to the helper over local IPC:
 

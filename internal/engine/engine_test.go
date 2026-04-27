@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tracegate/tracegate-launcher/internal/planner"
-	"github.com/tracegate/tracegate-launcher/internal/profile"
+	"github.com/tracegate/big-red-button/internal/planner"
+	"github.com/tracegate/big-red-button/internal/profile"
 )
 
 func TestRunConnectSuccess(t *testing.T) {

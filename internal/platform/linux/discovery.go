@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/tracegate/tracegate-launcher/internal/routes"
+	"github.com/tracegate/big-red-button/internal/routes"
 )
 
 type CommandRunner interface {

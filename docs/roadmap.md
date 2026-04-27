@@ -10,7 +10,7 @@ Date: 2026-04-25
 - record the development plan and quality gates
 - define the V7 profile schema consumed by the launcher
 - scaffold the Go module and Wails v2 UI shell
-- add a headless `tracegate-launcherctl` path before relying on the UI
+- add a headless `big-red-button` path before relying on the UI
 
 ## Phase 1: Linux MVP
 
@@ -26,7 +26,7 @@ Scope:
 - add route exclusion for WSTunnel endpoint
 - expose simple status to the UI
 - cleanly disconnect and restore network state
-- run the same lifecycle through `tracegate-launcherctl` for repeatable tests
+- run the same lifecycle through `big-red-button` for repeatable tests
 
 Exit criteria:
 

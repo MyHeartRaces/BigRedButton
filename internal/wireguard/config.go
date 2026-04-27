@@ -5,7 +5,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/tracegate/tracegate-launcher/internal/profile"
+	"github.com/tracegate/big-red-button/internal/profile"
 )
 
 type Config struct {

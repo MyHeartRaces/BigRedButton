@@ -8,15 +8,15 @@ the short architectural summary.
 
 ## Preferred Shape
 
-Tracegate Launcher should be split into a small UI and a privileged networking
+Big Red Button should be split into a small UI and a privileged networking
 backend.
 
 ```text
-Tracegate Launcher UI
+Big Red Button UI
         |
         | local IPC
         v
-Tracegate Launcher helper
+Big Red Button helper
         |
         +-- profile parser and validator
         +-- WSTunnel process manager
@@ -56,9 +56,9 @@ tests.
 
 ## Deliverables
 
-- `tracegate-launcher`: Wails desktop UI.
-- `tracegate-launcherd`: privileged Go helper / daemon.
-- `tracegate-launcherctl`: Go CLI for development, diagnostics and headless
+- `big-red-button`: Wails desktop UI.
+- `big-red-buttond`: privileged Go helper / daemon.
+- `big-red-button`: Go CLI for development, diagnostics and headless
   tests.
 
 ## Linux Backend

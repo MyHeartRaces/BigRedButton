@@ -2,11 +2,11 @@
 
 Date: 2026-04-25
 
-Project name: Tracegate Launcher.
+Project name: Big Red Button.
 
 ## Product
 
-Tracegate Launcher is a desktop client for Tracegate V7, where V7 means
+Big Red Button is a desktop client for Tracegate V7, where V7 means
 WireGuard over WSTunnel:
 
 ```text

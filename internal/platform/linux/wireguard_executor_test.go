@@ -7,15 +7,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tracegate/tracegate-launcher/internal/planner"
-	"github.com/tracegate/tracegate-launcher/internal/profile"
-	"github.com/tracegate/tracegate-launcher/internal/wireguard"
+	"github.com/tracegate/big-red-button/internal/planner"
+	"github.com/tracegate/big-red-button/internal/profile"
+	"github.com/tracegate/big-red-button/internal/wireguard"
 )
 
 func TestWireGuardExecutorAppliesInterfacePeerAndRoutes(t *testing.T) {
 	config := wireGuardConfig(t)
 	runner := &recordingRunner{}
-	writer := &memoryConfigWriter{path: "/run/tracegate-launcher/wg-setconf.conf"}
+	writer := &memoryConfigWriter{path: "/run/big-red-button/wg-setconf.conf"}
 	executor, err := NewWireGuardExecutor(WireGuardExecutorOptions{
 		Config:       config,
 		Runner:       runner,
@@ -41,7 +41,7 @@ func TestWireGuardExecutorAppliesInterfacePeerAndRoutes(t *testing.T) {
 		{"ip", "address", "add", "10.70.0.2/32", "dev", "tg-v7"},
 		{"ip", "link", "set", "mtu", "1280", "dev", "tg-v7"},
 		{"ip", "link", "set", "up", "dev", "tg-v7"},
-		{"wg", "setconf", "tg-v7", "/run/tracegate-launcher/wg-setconf.conf"},
+		{"wg", "setconf", "tg-v7", "/run/big-red-button/wg-setconf.conf"},
 		{"ip", "-4", "route", "replace", "0.0.0.0/0", "dev", "tg-v7"},
 		{"ip", "-6", "route", "replace", "::/0", "dev", "tg-v7"},
 	}

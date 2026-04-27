@@ -5,14 +5,14 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/tracegate/tracegate-launcher/internal/profile"
-	"github.com/tracegate/tracegate-launcher/internal/routes"
+	"github.com/tracegate/big-red-button/internal/profile"
+	"github.com/tracegate/big-red-button/internal/routes"
 )
 
 const (
 	DefaultWSTunnelBinary     = "wstunnel"
 	DefaultWireGuardInterface = "tg-v7"
-	DefaultRuntimeRoot        = "/run/tracegate-launcher"
+	DefaultRuntimeRoot        = "/run/big-red-button"
 )
 
 type Options struct {

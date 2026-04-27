@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tracegate/tracegate-launcher/internal/routes"
+	"github.com/tracegate/big-red-button/internal/routes"
 )
 
 func TestRouteGetCommandIPv4(t *testing.T) {

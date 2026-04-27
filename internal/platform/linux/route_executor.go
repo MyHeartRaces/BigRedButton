@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tracegate/tracegate-launcher/internal/planner"
-	"github.com/tracegate/tracegate-launcher/internal/routes"
-	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
+	"github.com/tracegate/big-red-button/internal/planner"
+	"github.com/tracegate/big-red-button/internal/routes"
+	truntime "github.com/tracegate/big-red-button/internal/runtime"
 )
 
 var ErrUnsupportedRouteStep = errors.New("unsupported linux route executor step")

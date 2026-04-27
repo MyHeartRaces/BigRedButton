@@ -23,8 +23,8 @@ func TestWireGuardInterfaceCommands(t *testing.T) {
 		},
 		{
 			name: "set config",
-			fn:   func() (Command, error) { return WireGuardSetConfigCommand("tg-v7", "/run/tracegate-launcher/wg.conf") },
-			want: []string{"wg", "setconf", "tg-v7", "/run/tracegate-launcher/wg.conf"},
+			fn:   func() (Command, error) { return WireGuardSetConfigCommand("tg-v7", "/run/big-red-button/wg.conf") },
+			want: []string{"wg", "setconf", "tg-v7", "/run/big-red-button/wg.conf"},
 		},
 		{
 			name: "add address",

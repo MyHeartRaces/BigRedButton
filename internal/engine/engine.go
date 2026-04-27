@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tracegate/tracegate-launcher/internal/planner"
+	"github.com/tracegate/big-red-button/internal/planner"
 )
 
 type State string

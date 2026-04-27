@@ -1,105 +1,147 @@
-# Tracegate Launcher
+# Big Red Button
 
-Tracegate Launcher is the planned desktop client for Tracegate V7:
+Big Red Button is a headless Linux client for a single V7 profile:
 WireGuard over WSTunnel.
 
-Status: headless implementation scaffold. No production desktop client or
-privileged network helper exists in this repository yet.
+The current build is intended for early Linux testing. It provides a CLI,
+runtime state, Linux route handling, WSTunnel process supervision, and
+WireGuard setup/rollback primitives. The desktop UI is not implemented yet.
 
-## Current Product Decision
+## Status
 
-- Build the first working client on Linux.
-- Do not port before the Linux client can reliably connect, disconnect and
-  recover from ordinary failures.
-- After Linux is working, port to Windows and give that build to testers.
-- Treat macOS as the next desktop port after Windows validation. The UI and
-  core model should port cleanly, but the privileged networking layer still
-  requires platform-specific validation.
-- Keep iOS and Android out of scope until the desktop client is stable.
+Alpha. The guarded Linux lifecycle commands can change system routes, create
+WireGuard interfaces, start WSTunnel, and clean up runtime state. Test in a VM
+or disposable Arch Linux environment first.
 
-## Fixed Stack
+Implemented:
 
-- Go for the operational core, privileged helper and platform networking
-  adapters.
-- Wails v2 for the desktop shell.
-- TypeScript + Svelte for the small one-button UI.
-- Bundled upstream `wstunnel` binaries per target platform.
-- Native platform adapters only where Go cannot own the integration cleanly.
-  C++ is allowed for narrow shims, not as the default application runtime.
-
-## First MVP
-
-The first MVP is intentionally narrow:
-
-- one profile
-- one Connect / Disconnect control
-- system-wide tunnel as the target behavior
-- WireGuard over local WSTunnel
-- route exclusion for the WSTunnel server endpoint
-- minimal status reporting
-- no multi-profile UI
-- no account management
-- no advanced logs UI
-- no kill switch
-- no split tunneling UI
-- no mobile port
-
-Proxy-only mode can exist later as a diagnostic or fallback mode, but it is not
-the product target because it cannot cover all system traffic.
-
-## Current Implementation
-
-The first code slice is intentionally headless:
-
-```bash
-go test ./...
-go run ./cmd/tracegate-launcherctl validate-profile testdata/profiles/valid-v7.json
-go run ./cmd/tracegate-launcherctl plan-connect -endpoint-ip 203.0.113.10 testdata/profiles/valid-v7.json
-go run ./cmd/tracegate-launcherctl plan-disconnect
-go run ./cmd/tracegate-launcherctl status
-go run ./cmd/tracegate-launcherctl linux-dry-run-connect -endpoint-ip 203.0.113.10 -default-gateway 192.0.2.1 -default-interface eth0 testdata/profiles/valid-v7.json
-go run ./cmd/tracegate-launcherctl linux-dry-run-disconnect -runtime-root /run/tracegate-launcher
-# Linux only, changes system networking/process state:
-go run ./cmd/tracegate-launcherctl linux-connect -yes -endpoint-ip 203.0.113.10 testdata/profiles/valid-v7.json
-go run ./cmd/tracegate-launcherctl linux-disconnect -yes testdata/profiles/valid-v7.json
-```
-
-Implemented so far:
-
-- Go module
 - V7 profile parser and validator
 - secret-redacted profile summary
-- `tracegate-launcherctl validate-profile`
-- `tracegate-launcherctl plan-connect`
-- `tracegate-launcherctl plan-disconnect`
-- secret-free dry-run connect/disconnect plans
-- lifecycle engine with fake-executor rollback tests
-- platform-neutral route exclusion model
-- Linux `ip route get` output parser for future helper integration
-- Linux `ip route` command builders for route exclusion apply/rollback
-- Linux read-only endpoint route discovery through an injectable command runner
-- Linux dry-run connect executor exposed through `tracegate-launcherctl`,
-  with optional read-only route discovery
-- secret-free runtime state model and file store for future disconnect/rollback
-- Linux dry-run disconnect can read runtime state and plan saved route cleanup
-- real Linux route executor for endpoint exclusions, covered by fake-runner tests
-- WSTunnel client command builder for WireGuard UDP forwarding
-- WSTunnel process runner/executor abstraction with rollback tests
-- WireGuard `wg setconf` renderer and Linux command builders
-- Linux WireGuard executor with temporary secret config cleanup
-- composite Linux lifecycle executor for route, WSTunnel and WireGuard steps
-- runtime state metadata for WSTunnel process and WireGuard AllowedIPs
-- lifecycle disconnect path can stop stored WSTunnel PID and clean saved routes
-- guarded Linux connect/disconnect CLI entrypoints for the lifecycle executor
-- runtime status snapshots and `tracegate-launcherctl status`
-- redacted valid and invalid fixtures
+- connect/disconnect planner
+- runtime status snapshots
+- Linux endpoint route exclusions
+- WSTunnel command builder and process executor
+- WireGuard `wg setconf` renderer and Linux executor
+- composite Linux lifecycle executor with rollback tests
+- guarded Linux connect/disconnect CLI commands
+- Arch Linux package build files
 
-## Repository Layout
+Not implemented yet:
 
-- `docs/statements.md`: initial product and platform statements.
-- `docs/stack.md`: fixed implementation stack.
-- `docs/architecture.md`: first-pass architecture and stack notes.
-- `docs/application-architecture.md`: detailed process, IPC, lifecycle and
-  platform architecture.
-- `docs/development-plan.md`: next development sequence and quality gates.
-- `docs/roadmap.md`: phased delivery plan.
+- desktop UI
+- privileged daemon / IPC boundary
+- DNS adapter
+- kill switch
+- Windows, macOS, or mobile ports
+
+## Requirements
+
+Build-time:
+
+- Go 1.24 or newer
+- `make`
+
+Runtime on Linux:
+
+- `iproute2`
+- `wireguard-tools`
+- `wstunnel` in `PATH`, or pass `-wstunnel-binary /path/to/wstunnel`
+- root privileges or equivalent capabilities for real connect/disconnect
+
+On Arch Linux, `iproute2` and `wireguard-tools` are official packages. WSTunnel
+may need to be installed separately if it is not available in your configured
+repositories.
+
+## Build
+
+```bash
+make test
+make build
+./build/big-red-button help
+```
+
+The binary is written to `build/big-red-button`.
+
+## Arch Linux Package
+
+From a clean checkout on Arch Linux:
+
+```bash
+./scripts/build-arch-package.sh
+sudo pacman -U dist/arch/makepkg/big-red-button-*.pkg.tar.zst
+```
+
+The package installs:
+
+- `/usr/bin/big-red-button`
+- `/usr/share/licenses/big-red-button/LICENSE`
+- `/usr/share/doc/big-red-button/README.md`
+
+The PKGBUILD is in `packaging/arch/PKGBUILD`.
+
+## Quick Smoke Test
+
+```bash
+big-red-button validate-profile testdata/profiles/valid-v7.json
+big-red-button plan-connect \
+  -endpoint-ip 203.0.113.10 \
+  testdata/profiles/valid-v7.json
+big-red-button status
+```
+
+Dry-run Linux route planning:
+
+```bash
+big-red-button linux-dry-run-connect \
+  -endpoint-ip 203.0.113.10 \
+  -default-gateway 192.0.2.1 \
+  -default-interface eth0 \
+  testdata/profiles/valid-v7.json
+```
+
+## Real Linux Connect
+
+These commands change networking state. Run them only on the test machine.
+
+```bash
+sudo big-red-button linux-connect \
+  -yes \
+  -endpoint-ip <resolved-wstunnel-server-ip> \
+  -wstunnel-binary /usr/bin/wstunnel \
+  /path/to/profile.json
+```
+
+Disconnect:
+
+```bash
+sudo big-red-button linux-disconnect -yes /path/to/profile.json
+```
+
+Status:
+
+```bash
+big-red-button status
+```
+
+By default, runtime state is stored in `/run/big-red-button/state.json`.
+
+## Profile
+
+The expected profile is a normalized V7 WireGuard-over-WSTunnel JSON profile.
+See `testdata/profiles/valid-v7.json` for the current schema.
+
+The planner and runtime status never print private keys. The WireGuard executor
+does write a temporary `wg setconf` file with private key material while
+configuring the interface, then removes it after `wg setconf` returns.
+
+## Development
+
+```bash
+go vet ./...
+go test ./...
+go run ./cmd/big-red-button help
+```
+
+## License
+
+MIT. See `LICENSE`.
