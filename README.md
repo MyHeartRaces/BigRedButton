@@ -81,6 +81,7 @@ Implemented so far:
 - real Linux route executor for endpoint exclusions, covered by fake-runner tests
 - WSTunnel client command builder for WireGuard UDP forwarding
 - WSTunnel process runner/executor abstraction with rollback tests
+- WireGuard `wg setconf` renderer and Linux command builders
 - redacted valid and invalid fixtures
 
 ## Repository Layout
