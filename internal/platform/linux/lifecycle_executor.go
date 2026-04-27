@@ -15,6 +15,7 @@ type LifecycleExecutor struct {
 	route     *RouteExecutor
 	wstunnel  *supervisor.WSTunnelExecutor
 	wireguard *WireGuardExecutor
+	stopper   supervisor.ProcessStopper
 }
 
 type LifecycleExecutorOptions struct {
@@ -22,6 +23,7 @@ type LifecycleExecutorOptions struct {
 	Profile            profile.Config
 	CommandRunner      CommandRunner
 	ProcessRunner      supervisor.ProcessRunner
+	ProcessStopper     supervisor.ProcessStopper
 	WGConfigWriter     WireGuardConfigWriter
 	WSTunnelBinary     string
 	RuntimeRoot        string
@@ -79,11 +81,16 @@ func NewLifecycleExecutor(options LifecycleExecutorOptions) (*LifecycleExecutor,
 	if err != nil {
 		return nil, err
 	}
+	stopper := options.ProcessStopper
+	if stopper == nil {
+		stopper = supervisor.OSProcessStopper{}
+	}
 
 	return &LifecycleExecutor{
 		route:     routeExecutor,
 		wstunnel:  wstunnelExecutor,
 		wireguard: wireGuardExecutor,
+		stopper:   stopper,
 	}, nil
 }
 
@@ -102,6 +109,9 @@ func (e *LifecycleExecutor) Apply(ctx context.Context, step planner.Step) error 
 	}
 	if step.ID == "start-wstunnel" {
 		return e.wstunnel.Apply(ctx, step)
+	}
+	if step.ID == "stop-wstunnel" {
+		return e.stopWSTunnel(ctx, step)
 	}
 	if isWireGuardStep(step) {
 		return e.wireguard.Apply(ctx, step)
@@ -144,6 +154,22 @@ func (e *LifecycleExecutor) storeRuntimeState(ctx context.Context, step planner.
 	return nil
 }
 
+func (e *LifecycleExecutor) stopWSTunnel(ctx context.Context, step planner.Step) error {
+	state, err := e.route.stateForDisconnect(ctx)
+	if err != nil {
+		return err
+	}
+	if state.WSTunnelProcess == nil {
+		e.route.recordRuntime(OperationApply, step.ID, "no wstunnel process in runtime state")
+		return nil
+	}
+	if err := e.stopper.StopPID(ctx, state.WSTunnelProcess.PID); err != nil {
+		return err
+	}
+	e.route.recordRuntime(OperationApply, step.ID, fmt.Sprintf("stop pid %d", state.WSTunnelProcess.PID))
+	return nil
+}
+
 func (e *LifecycleExecutor) RouteOperations() []Operation {
 	if e == nil || e.route == nil {
 		return nil
@@ -167,7 +193,7 @@ func (e *LifecycleExecutor) WireGuardOperations() []Operation {
 
 func isNoopLifecycleStep(step planner.Step) bool {
 	switch step.ID {
-	case "validate-profile", "resolve-wstunnel-host", "dns-plan", "verify-connected":
+	case "validate-profile", "resolve-wstunnel-host", "restore-dns", "dns-plan", "verify-connected":
 		return true
 	default:
 		return false

@@ -85,6 +85,7 @@ Implemented so far:
 - Linux WireGuard executor with temporary secret config cleanup
 - composite Linux lifecycle executor for route, WSTunnel and WireGuard steps
 - runtime state metadata for WSTunnel process and WireGuard AllowedIPs
+- lifecycle disconnect path can stop stored WSTunnel PID and clean saved routes
 - redacted valid and invalid fixtures
 
 ## Repository Layout

@@ -9,6 +9,7 @@ import (
 	"github.com/tracegate/tracegate-launcher/internal/engine"
 	"github.com/tracegate/tracegate-launcher/internal/planner"
 	"github.com/tracegate/tracegate-launcher/internal/profile"
+	"github.com/tracegate/tracegate-launcher/internal/routes"
 	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
 	"github.com/tracegate/tracegate-launcher/internal/supervisor"
 )
@@ -139,6 +140,63 @@ func TestLifecycleExecutorRollsBackOnWireGuardFailure(t *testing.T) {
 	}
 }
 
+func TestLifecycleExecutorRunsDisconnectPlanFromRuntimeState(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	profileConfig := linuxProfile(t)
+	exclusion, err := routes.NewEndpointExclusion("203.0.113.10", "192.0.2.1", "eth0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := truntime.State{
+		Version:             truntime.StateVersion,
+		ProfileFingerprint:  "abc123",
+		WireGuardInterface:  "tg-v7",
+		RouteExclusions:     []routes.EndpointExclusion{exclusion},
+		WireGuardAllowedIPs: []string{"0.0.0.0/0", "::/0"},
+	}.WithWSTunnelProcess(4242, []string{"wstunnel", "client"})
+	if err := (truntime.Store{Root: runtimeRoot}).Save(context.Background(), state); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := planner.Disconnect(planner.Options{RuntimeRoot: runtimeRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &recordingRunner{}
+	stopper := &lifecycleStopper{}
+	executor, err := NewLifecycleExecutor(LifecycleExecutorOptions{
+		Plan:           plan,
+		Profile:        profileConfig,
+		CommandRunner:  runner,
+		ProcessStopper: stopper,
+		RuntimeRoot:    runtimeRoot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := engine.New(executor).Run(context.Background(), plan)
+	if result.State != engine.StateIdle {
+		t.Fatalf("state = %s error = %s", result.State, result.Error)
+	}
+	if len(stopper.stopped) != 1 || stopper.stopped[0] != 4242 {
+		t.Fatalf("stopped pids = %#v", stopper.stopped)
+	}
+	commands := flattenArgv(runner.argv)
+	for _, want := range []string{
+		"ip -4 route delete 0.0.0.0/0 dev tg-v7",
+		"ip -6 route delete ::/0 dev tg-v7",
+		"ip link delete dev tg-v7",
+		"ip -4 route delete 203.0.113.10/32 via 192.0.2.1 dev eth0",
+	} {
+		if !strings.Contains(commands, want) {
+			t.Fatalf("missing disconnect command %q in:\n%s", want, commands)
+		}
+	}
+	if _, err := (truntime.Store{Root: runtimeRoot}).Load(context.Background()); err == nil {
+		t.Fatal("expected runtime state to be cleared")
+	}
+}
+
 func linuxProfile(t *testing.T) profile.Config {
 	t.Helper()
 	config, err := profile.LoadFile("../../../testdata/profiles/valid-v7.json")
@@ -183,4 +241,14 @@ func (p *lifecycleProcess) Info() supervisor.ProcessInfo {
 func (p *lifecycleProcess) Stop(context.Context) error {
 	p.stopped = true
 	return nil
+}
+
+type lifecycleStopper struct {
+	stopped []int
+	err     error
+}
+
+func (s *lifecycleStopper) StopPID(_ context.Context, pid int) error {
+	s.stopped = append(s.stopped, pid)
+	return s.err
 }
