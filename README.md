@@ -3,8 +3,8 @@
 Tracegate Launcher is the planned desktop client for Tracegate V7:
 WireGuard over WSTunnel.
 
-Status: bootstrap notes only. No production client code exists in this
-repository yet.
+Status: headless implementation scaffold. No production desktop client or
+privileged network helper exists in this repository yet.
 
 ## Current Product Decision
 
@@ -70,6 +70,7 @@ Implemented so far:
 - lifecycle engine with fake-executor rollback tests
 - platform-neutral route exclusion model
 - Linux `ip route get` output parser for future helper integration
+- Linux `ip route` command builders for route exclusion apply/rollback
 - redacted valid and invalid fixtures
 
 ## Repository Layout
