@@ -212,3 +212,34 @@ func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
 		t.Fatalf("expected runtime state to be cleared, err = %v", err)
 	}
 }
+
+func TestLinuxConnectRequiresConfirmation(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-connect",
+		"-endpoint-ip", "203.0.113.10",
+		"../../testdata/profiles/valid-v7.json",
+	}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "requires -yes") {
+		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}
+
+func TestLinuxDisconnectRequiresConfirmation(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-disconnect",
+		"../../testdata/profiles/valid-v7.json",
+	}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "requires -yes") {
+		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}

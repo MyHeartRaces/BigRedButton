@@ -7,12 +7,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	stdruntime "runtime"
 
 	"github.com/tracegate/tracegate-launcher/internal/engine"
 	"github.com/tracegate/tracegate-launcher/internal/planner"
 	platformlinux "github.com/tracegate/tracegate-launcher/internal/platform/linux"
 	"github.com/tracegate/tracegate-launcher/internal/profile"
+	"github.com/tracegate/tracegate-launcher/internal/supervisor"
 )
+
+var currentGOOS = stdruntime.GOOS
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -35,6 +39,10 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return linuxDryRunConnect(args[1:], stdout, stderr)
 	case "linux-dry-run-disconnect":
 		return linuxDryRunDisconnect(args[1:], stdout, stderr)
+	case "linux-connect":
+		return linuxConnect(args[1:], stdout, stderr)
+	case "linux-disconnect":
+		return linuxDisconnect(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return 0
@@ -243,6 +251,146 @@ func linuxDryRunDisconnect(args []string, stdout io.Writer, stderr io.Writer) in
 	return 0
 }
 
+func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-connect", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	confirmed := fs.Bool("yes", false, "confirm this command may change Linux networking state")
+	options := planConnectFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")
+		return 2
+	}
+	if !*confirmed {
+		fmt.Fprintln(stderr, "linux-connect requires -yes because it changes routes, processes and WireGuard state")
+		return 2
+	}
+	if currentGOOS != "linux" {
+		fmt.Fprintf(stderr, "linux-connect can only run on Linux; current OS is %s\n", currentGOOS)
+		return 1
+	}
+
+	config, err := profile.LoadFile(fs.Arg(0))
+	if err != nil {
+		printProfileError(err, stderr, *jsonOutput, stdout)
+		return 1
+	}
+	plan, err := planner.Connect(config, planner.Options{
+		EndpointIPs:        csvOption(*options.endpointIPs),
+		DefaultGateway:     *options.defaultGateway,
+		DefaultInterface:   *options.defaultInterface,
+		WSTunnelBinary:     *options.wstunnelBinary,
+		WireGuardInterface: *options.wireguardInterface,
+		RuntimeRoot:        *options.runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build connect plan: %v\n", err)
+		return 1
+	}
+	if len(plan.EndpointIPs) == 0 {
+		fmt.Fprintln(stderr, "linux-connect requires at least one -endpoint-ip for the WSTunnel server")
+		return 2
+	}
+	executor, err := platformlinux.NewLifecycleExecutor(platformlinux.LifecycleExecutorOptions{
+		Plan:           plan,
+		Profile:        config,
+		WSTunnelBinary: *options.wstunnelBinary,
+		RuntimeRoot:    plan.RuntimeRoot,
+		WireGuardIface: plan.WireGuardInterface,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build linux lifecycle executor: %v\n", err)
+		return 1
+	}
+	result := engine.New(executor).Run(context.Background(), plan)
+	output := linuxLifecycleOutput{
+		Plan:                plan,
+		Result:              result,
+		RouteOperations:     executor.RouteOperations(),
+		WSTunnelOperations:  executor.WSTunnelOperations(),
+		WireGuardOperations: executor.WireGuardOperations(),
+	}
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printPlan(plan, false, stdout)
+		printLinuxLifecycle(output, stdout)
+	}
+	if result.State != engine.StateConnected {
+		return 1
+	}
+	return 0
+}
+
+func linuxDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-disconnect", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	confirmed := fs.Bool("yes", false, "confirm this command may change Linux networking state")
+	wireguardInterface := fs.String("wireguard-interface", "", "WireGuard interface name")
+	runtimeRoot := fs.String("runtime-root", "", "launcher runtime state root")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-disconnect -yes [-json] [-runtime-root path] <profile.json>")
+		return 2
+	}
+	if !*confirmed {
+		fmt.Fprintln(stderr, "linux-disconnect requires -yes because it changes processes, routes and WireGuard state")
+		return 2
+	}
+	if currentGOOS != "linux" {
+		fmt.Fprintf(stderr, "linux-disconnect can only run on Linux; current OS is %s\n", currentGOOS)
+		return 1
+	}
+
+	config, err := profile.LoadFile(fs.Arg(0))
+	if err != nil {
+		printProfileError(err, stderr, *jsonOutput, stdout)
+		return 1
+	}
+	plan, err := planner.Disconnect(planner.Options{
+		WireGuardInterface: *wireguardInterface,
+		RuntimeRoot:        *runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build disconnect plan: %v\n", err)
+		return 1
+	}
+	executor, err := platformlinux.NewLifecycleExecutor(platformlinux.LifecycleExecutorOptions{
+		Plan:           plan,
+		Profile:        config,
+		RuntimeRoot:    plan.RuntimeRoot,
+		WireGuardIface: plan.WireGuardInterface,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build linux lifecycle executor: %v\n", err)
+		return 1
+	}
+	result := engine.New(executor).Run(context.Background(), plan)
+	output := linuxLifecycleOutput{
+		Plan:                plan,
+		Result:              result,
+		RouteOperations:     executor.RouteOperations(),
+		WSTunnelOperations:  executor.WSTunnelOperations(),
+		WireGuardOperations: executor.WireGuardOperations(),
+	}
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printPlan(plan, false, stdout)
+		printLinuxLifecycle(output, stdout)
+	}
+	if result.State != engine.StateIdle {
+		return 1
+	}
+	return 0
+}
+
 func planDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs := flag.NewFlagSet("plan-disconnect", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -288,6 +436,14 @@ type linuxDryRunOutput struct {
 	Plan       planner.Plan              `json:"plan"`
 	Result     engine.Result             `json:"result"`
 	Operations []platformlinux.Operation `json:"operations"`
+}
+
+type linuxLifecycleOutput struct {
+	Plan                planner.Plan                   `json:"plan"`
+	Result              engine.Result                  `json:"result"`
+	RouteOperations     []platformlinux.Operation      `json:"route_operations,omitempty"`
+	WSTunnelOperations  []supervisor.WSTunnelOperation `json:"wstunnel_operations,omitempty"`
+	WireGuardOperations []platformlinux.Operation      `json:"wireguard_operations,omitempty"`
 }
 
 func planConnectFlags(fs *flag.FlagSet) connectFlagValues {
@@ -386,6 +542,52 @@ func printLinuxDryRun(output linuxDryRunOutput, stdout io.Writer) {
 	}
 }
 
+func printLinuxLifecycle(output linuxLifecycleOutput, stdout io.Writer) {
+	fmt.Fprintf(stdout, "engine state: %s\n", output.Result.State)
+	if output.Result.Error != "" {
+		fmt.Fprintf(stdout, "engine error: %s\n", output.Result.Error)
+	}
+	if output.Result.RollbackError != "" {
+		fmt.Fprintf(stdout, "rollback error: %s\n", output.Result.RollbackError)
+	}
+	printLinuxOperations(stdout, "route operations", output.RouteOperations)
+	printWSTunnelOperations(stdout, output.WSTunnelOperations)
+	printLinuxOperations(stdout, "wireguard operations", output.WireGuardOperations)
+}
+
+func printLinuxOperations(stdout io.Writer, title string, operations []platformlinux.Operation) {
+	if len(operations) == 0 {
+		return
+	}
+	fmt.Fprintf(stdout, "%s:\n", title)
+	for _, operation := range operations {
+		if operation.Runtime != "" {
+			fmt.Fprintf(stdout, "- %s %s: %s\n", operation.Phase, operation.StepID, operation.Runtime)
+			continue
+		}
+		if operation.Command == nil {
+			continue
+		}
+		fmt.Fprintf(stdout, "- %s %s: %s\n", operation.Phase, operation.StepID, operation.Command.String())
+	}
+}
+
+func printWSTunnelOperations(stdout io.Writer, operations []supervisor.WSTunnelOperation) {
+	if len(operations) == 0 {
+		return
+	}
+	fmt.Fprintln(stdout, "wstunnel operations:")
+	for _, operation := range operations {
+		if operation.Command != nil {
+			fmt.Fprintf(stdout, "- %s %s: %s\n", operation.Phase, operation.StepID, operation.Command.String())
+			continue
+		}
+		if operation.Process != nil {
+			fmt.Fprintf(stdout, "- %s %s: pid=%d\n", operation.Phase, operation.StepID, operation.Process.PID)
+		}
+	}
+}
+
 func csvOption(value string) []string {
 	if value == "" {
 		return nil
@@ -402,4 +604,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  plan-disconnect [-json]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
+	fmt.Fprintln(w, "  linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")
+	fmt.Fprintln(w, "  linux-disconnect -yes [-json] [-runtime-root path] <profile.json>")
 }
