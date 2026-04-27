@@ -57,6 +57,7 @@ go run ./cmd/tracegate-launcherctl validate-profile testdata/profiles/valid-v7.j
 go run ./cmd/tracegate-launcherctl plan-connect -endpoint-ip 203.0.113.10 testdata/profiles/valid-v7.json
 go run ./cmd/tracegate-launcherctl plan-disconnect
 go run ./cmd/tracegate-launcherctl linux-dry-run-connect -endpoint-ip 203.0.113.10 -default-gateway 192.0.2.1 -default-interface eth0 testdata/profiles/valid-v7.json
+go run ./cmd/tracegate-launcherctl linux-dry-run-disconnect -runtime-root /run/tracegate-launcher
 ```
 
 Implemented so far:
@@ -76,6 +77,7 @@ Implemented so far:
 - Linux dry-run connect executor exposed through `tracegate-launcherctl`,
   with optional read-only route discovery
 - secret-free runtime state model and file store for future disconnect/rollback
+- Linux dry-run disconnect can read runtime state and plan saved route cleanup
 - redacted valid and invalid fixtures
 
 ## Repository Layout

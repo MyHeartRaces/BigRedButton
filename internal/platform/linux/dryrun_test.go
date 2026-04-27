@@ -9,6 +9,7 @@ import (
 	"github.com/tracegate/tracegate-launcher/internal/engine"
 	"github.com/tracegate/tracegate-launcher/internal/planner"
 	"github.com/tracegate/tracegate-launcher/internal/profile"
+	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
 )
 
 func TestDryRunExecutorRecordsConcreteRouteCommands(t *testing.T) {
@@ -34,6 +35,13 @@ func TestDryRunExecutorRecordsConcreteRouteCommands(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
+	}
+	state, ok := executor.RuntimeState()
+	if !ok {
+		t.Fatal("expected runtime state")
+	}
+	if len(state.RouteExclusions) != 1 {
+		t.Fatalf("runtime route exclusions = %#v", state.RouteExclusions)
 	}
 }
 
@@ -91,6 +99,13 @@ func TestDryRunExecutorUsesReadOnlyDiscovery(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
 	}
+	state, ok := executor.RuntimeState()
+	if !ok {
+		t.Fatal("expected runtime state")
+	}
+	if len(state.RouteExclusions) != 1 || state.RouteExclusions[0].Gateway != "192.0.2.1" {
+		t.Fatalf("runtime state = %#v", state)
+	}
 }
 
 func TestDryRunExecutorRecordsRouteRollbackCommand(t *testing.T) {
@@ -113,6 +128,53 @@ func TestDryRunExecutorRecordsRouteRollbackCommand(t *testing.T) {
 	want := [][]string{{"ip", "-4", "route", "delete", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
+	}
+}
+
+func TestDryRunExecutorPersistsRuntimeStateAndDisconnectDeletesRoutes(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	connect := connectPlan(t, planner.Options{
+		EndpointIPs:      []string{"203.0.113.10"},
+		DefaultGateway:   "192.0.2.1",
+		DefaultInterface: "eth0",
+		RuntimeRoot:      runtimeRoot,
+	})
+	connectExecutor, err := NewDryRunExecutorWithOptions(connect, DryRunOptions{
+		PersistRuntime: true,
+		RuntimeRoot:    runtimeRoot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	connectResult := engine.New(connectExecutor).Run(context.Background(), connect)
+	if connectResult.State != engine.StateConnected {
+		t.Fatalf("connect state = %s error = %s", connectResult.State, connectResult.Error)
+	}
+
+	disconnect, err := planner.Disconnect(planner.Options{RuntimeRoot: runtimeRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disconnectExecutor, err := NewDryRunExecutorWithOptions(disconnect, DryRunOptions{
+		PersistRuntime: true,
+		RuntimeRoot:    runtimeRoot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disconnectResult := engine.New(disconnectExecutor).Run(context.Background(), disconnect)
+	if disconnectResult.State != engine.StateIdle {
+		t.Fatalf("disconnect state = %s error = %s", disconnectResult.State, disconnectResult.Error)
+	}
+
+	got := operationArgv(disconnectExecutor.Operations())
+	want := [][]string{{"ip", "-4", "route", "delete", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %#v want %#v", got, want)
+	}
+	store := truntime.Store{Root: runtimeRoot}
+	if _, err := store.Load(context.Background()); err == nil {
+		t.Fatal("expected runtime state to be cleared")
 	}
 }
 
@@ -141,6 +203,9 @@ func findStep(plan planner.Plan, id string) planner.Step {
 func operationArgv(operations []Operation) [][]string {
 	argv := make([][]string, 0, len(operations))
 	for _, operation := range operations {
+		if operation.Command == nil {
+			continue
+		}
 		argv = append(argv, operation.Command.Argv())
 	}
 	return argv

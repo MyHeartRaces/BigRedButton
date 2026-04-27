@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -159,5 +161,54 @@ func TestLinuxDryRunConnectCommandFailsWithoutConcreteRouteExclusion(t *testing.
 	}
 	if !strings.Contains(out, "route exclusion for endpoint 203.0.113.10 is not resolved") {
 		t.Fatalf("expected unresolved route exclusion error, got: %s", out)
+	}
+}
+
+func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	var connectStdout, connectStderr bytes.Buffer
+
+	code := run([]string{
+		"linux-dry-run-connect",
+		"-persist-runtime-state",
+		"-runtime-root", runtimeRoot,
+		"-endpoint-ip", "203.0.113.10",
+		"-default-gateway", "192.0.2.1",
+		"-default-interface", "eth0",
+		"../../testdata/profiles/valid-v7.json",
+	}, &connectStdout, &connectStderr)
+	if code != 0 {
+		t.Fatalf("connect code = %d stderr = %s", code, connectStderr.String())
+	}
+	statePath := filepath.Join(runtimeRoot, "state.json")
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatalf("expected runtime state file: %v", err)
+	}
+	if !strings.Contains(connectStdout.String(), "save "+statePath) {
+		t.Fatalf("expected save operation, got: %s", connectStdout.String())
+	}
+
+	var disconnectStdout, disconnectStderr bytes.Buffer
+	code = run([]string{
+		"linux-dry-run-disconnect",
+		"-persist-runtime-state",
+		"-runtime-root", runtimeRoot,
+	}, &disconnectStdout, &disconnectStderr)
+	if code != 0 {
+		t.Fatalf("disconnect code = %d stderr = %s stdout = %s", code, disconnectStderr.String(), disconnectStdout.String())
+	}
+	out := disconnectStdout.String()
+	for _, want := range []string{
+		"engine state: Idle",
+		"load " + statePath,
+		"ip -4 route delete 203.0.113.10/32 via 192.0.2.1 dev eth0",
+		"clear " + statePath,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+		t.Fatalf("expected runtime state to be cleared, err = %v", err)
 	}
 }

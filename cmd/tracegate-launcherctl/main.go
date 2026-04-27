@@ -33,6 +33,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return planDisconnect(args[1:], stdout, stderr)
 	case "linux-dry-run-connect":
 		return linuxDryRunConnect(args[1:], stdout, stderr)
+	case "linux-dry-run-disconnect":
+		return linuxDryRunDisconnect(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return 0
@@ -138,12 +140,13 @@ func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	jsonOutput := fs.Bool("json", false, "print JSON output")
 	discoverRoutes := fs.Bool("discover-routes", false, "run read-only Linux route discovery during dry-run")
+	persistRuntimeState := fs.Bool("persist-runtime-state", false, "write runtime state during dry-run")
 	options := planConnectFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-dry-run-connect [-json] [-discover-routes] [-endpoint-ip ip[,ip]] <profile.json>")
+		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
 		return 2
 	}
 
@@ -166,6 +169,8 @@ func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 	executor, err := platformlinux.NewDryRunExecutorWithOptions(plan, platformlinux.DryRunOptions{
 		ReadOnlyDiscovery: *discoverRoutes,
+		PersistRuntime:    *persistRuntimeState,
+		RuntimeRoot:       plan.RuntimeRoot,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "build linux dry-run executor: %v\n", err)
@@ -184,6 +189,55 @@ func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		printLinuxDryRun(output, stdout)
 	}
 	if result.State != engine.StateConnected {
+		return 1
+	}
+	return 0
+}
+
+func linuxDryRunDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-dry-run-disconnect", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	persistRuntimeState := fs.Bool("persist-runtime-state", false, "clear runtime state during dry-run")
+	wireguardInterface := fs.String("wireguard-interface", "", "WireGuard interface name")
+	runtimeRoot := fs.String("runtime-root", "", "launcher runtime state root")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: tracegate-launcherctl linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
+		return 2
+	}
+
+	plan, err := planner.Disconnect(planner.Options{
+		WireGuardInterface: *wireguardInterface,
+		RuntimeRoot:        *runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build disconnect plan: %v\n", err)
+		return 1
+	}
+	executor, err := platformlinux.NewDryRunExecutorWithOptions(plan, platformlinux.DryRunOptions{
+		PersistRuntime: *persistRuntimeState,
+		RuntimeRoot:    plan.RuntimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build linux dry-run executor: %v\n", err)
+		return 1
+	}
+	result := engine.New(executor).Run(context.Background(), plan)
+	output := linuxDryRunOutput{
+		Plan:       plan,
+		Result:     result,
+		Operations: executor.Operations(),
+	}
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printPlan(plan, false, stdout)
+		printLinuxDryRun(output, stdout)
+	}
+	if result.State != engine.StateIdle {
 		return 1
 	}
 	return 0
@@ -321,6 +375,13 @@ func printLinuxDryRun(output linuxDryRunOutput, stdout io.Writer) {
 	}
 	fmt.Fprintln(stdout, "linux dry-run commands:")
 	for _, operation := range output.Operations {
+		if operation.Runtime != "" {
+			fmt.Fprintf(stdout, "- %s %s: %s\n", operation.Phase, operation.StepID, operation.Runtime)
+			continue
+		}
+		if operation.Command == nil {
+			continue
+		}
 		fmt.Fprintf(stdout, "- %s %s: %s\n", operation.Phase, operation.StepID, operation.Command.String())
 	}
 }
@@ -339,5 +400,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  validate-profile [-json] <profile.json>")
 	fmt.Fprintln(w, "  plan-connect [-json] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  plan-disconnect [-json]")
-	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-endpoint-ip ip[,ip]] <profile.json>")
+	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
+	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
 }

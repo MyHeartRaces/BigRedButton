@@ -7,6 +7,7 @@ import (
 
 	"github.com/tracegate/tracegate-launcher/internal/planner"
 	"github.com/tracegate/tracegate-launcher/internal/routes"
+	truntime "github.com/tracegate/tracegate-launcher/internal/runtime"
 )
 
 type OperationPhase string
@@ -19,20 +20,27 @@ const (
 type Operation struct {
 	Phase   OperationPhase `json:"phase"`
 	StepID  string         `json:"step_id"`
-	Command Command        `json:"command"`
+	Command *Command       `json:"command,omitempty"`
+	Runtime string         `json:"runtime,omitempty"`
 }
 
 type DryRunExecutor struct {
+	plan                      planner.Plan
 	routeExclusionsByEndpoint map[string]routes.EndpointExclusion
 	discoveredByEndpoint      map[string]routes.EndpointExclusion
+	runtimeState              truntime.State
 	runner                    CommandRunner
+	store                     truntime.Store
 	readOnlyDiscovery         bool
+	persistRuntimeState       bool
 	operations                []Operation
 }
 
 type DryRunOptions struct {
 	ReadOnlyDiscovery bool
+	PersistRuntime    bool
 	Runner            CommandRunner
+	RuntimeRoot       string
 }
 
 func NewDryRunExecutor(plan planner.Plan) (*DryRunExecutor, error) {
@@ -51,11 +59,18 @@ func NewDryRunExecutorWithOptions(plan planner.Plan, options DryRunOptions) (*Dr
 	if options.ReadOnlyDiscovery && runner == nil {
 		runner = ExecRunner{}
 	}
+	runtimeRoot := strings.TrimSpace(options.RuntimeRoot)
+	if runtimeRoot == "" {
+		runtimeRoot = plan.RuntimeRoot
+	}
 	return &DryRunExecutor{
+		plan:                      plan,
 		routeExclusionsByEndpoint: routeExclusionsByEndpoint,
 		discoveredByEndpoint:      make(map[string]routes.EndpointExclusion),
 		runner:                    runner,
+		store:                     truntime.Store{Root: runtimeRoot},
 		readOnlyDiscovery:         options.ReadOnlyDiscovery,
+		persistRuntimeState:       options.PersistRuntime,
 	}, nil
 }
 
@@ -100,6 +115,49 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 			return err
 		}
 		e.record(OperationApply, step.ID, command)
+	case step.ID == "store-runtime-state":
+		state, err := e.stateFromPlan()
+		if err != nil {
+			return err
+		}
+		e.runtimeState = state
+		if e.persistRuntimeState {
+			if err := e.store.Save(ctx, state); err != nil {
+				return err
+			}
+			e.recordRuntime(OperationApply, step.ID, "save "+e.storePath())
+		} else {
+			e.recordRuntime(OperationApply, step.ID, "would save "+e.storePath())
+		}
+	case step.ID == "read-runtime-state":
+		state, err := e.store.Load(ctx)
+		if err != nil {
+			return err
+		}
+		e.runtimeState = state
+		e.routeExclusionsByEndpoint = routeExclusionMap(state.RouteExclusions)
+		e.recordRuntime(OperationApply, step.ID, "load "+e.storePath())
+	case step.ID == "remove-endpoint-route-exclusions":
+		state, err := e.stateForDisconnect(ctx)
+		if err != nil {
+			return err
+		}
+		for _, exclusion := range state.RouteExclusions {
+			command, err := DeleteEndpointExclusionCommand(exclusion)
+			if err != nil {
+				return err
+			}
+			e.record(OperationApply, step.ID, command)
+		}
+	case step.ID == "clear-runtime-state":
+		if e.persistRuntimeState {
+			if err := e.store.Clear(ctx); err != nil {
+				return err
+			}
+			e.recordRuntime(OperationApply, step.ID, "clear "+e.storePath())
+		} else {
+			e.recordRuntime(OperationApply, step.ID, "would clear "+e.storePath())
+		}
 	}
 	return nil
 }
@@ -124,6 +182,13 @@ func (e *DryRunExecutor) Rollback(_ context.Context, step planner.Step) error {
 	return nil
 }
 
+func (e *DryRunExecutor) RuntimeState() (truntime.State, bool) {
+	if e == nil || e.runtimeState.Version == 0 {
+		return truntime.State{}, false
+	}
+	return e.runtimeState, true
+}
+
 func (e *DryRunExecutor) Operations() []Operation {
 	if e == nil {
 		return nil
@@ -137,7 +202,15 @@ func (e *DryRunExecutor) record(phase OperationPhase, stepID string, command Com
 	e.operations = append(e.operations, Operation{
 		Phase:   phase,
 		StepID:  stepID,
-		Command: command,
+		Command: &command,
+	})
+}
+
+func (e *DryRunExecutor) recordRuntime(phase OperationPhase, stepID string, runtime string) {
+	e.operations = append(e.operations, Operation{
+		Phase:   phase,
+		StepID:  stepID,
+		Runtime: runtime,
 	})
 }
 
@@ -153,6 +226,62 @@ func (e *DryRunExecutor) routeExclusionForStep(step planner.Step) (routes.Endpoi
 		return exclusion, nil
 	}
 	return routes.EndpointExclusion{}, fmt.Errorf("route exclusion for endpoint %s is not resolved", endpointIP)
+}
+
+func (e *DryRunExecutor) stateFromPlan() (truntime.State, error) {
+	state, err := truntime.NewStateFromConnectPlan(e.plan)
+	if err != nil {
+		return truntime.State{}, err
+	}
+	if len(e.discoveredByEndpoint) == 0 {
+		return state, nil
+	}
+	merged := make([]routes.EndpointExclusion, 0, len(e.routeExclusionsByEndpoint)+len(e.discoveredByEndpoint))
+	seen := map[string]struct{}{}
+	for _, exclusion := range state.RouteExclusions {
+		merged = append(merged, exclusion)
+		seen[exclusion.EndpointIP] = struct{}{}
+	}
+	for _, exclusion := range e.discoveredByEndpoint {
+		if _, ok := seen[exclusion.EndpointIP]; ok {
+			continue
+		}
+		merged = append(merged, exclusion)
+	}
+	state.RouteExclusions = merged
+	if err := state.Validate(); err != nil {
+		return truntime.State{}, err
+	}
+	return state, nil
+}
+
+func (e *DryRunExecutor) stateForDisconnect(ctx context.Context) (truntime.State, error) {
+	if e.runtimeState.Version != 0 {
+		return e.runtimeState, nil
+	}
+	state, err := e.store.Load(ctx)
+	if err != nil {
+		return truntime.State{}, err
+	}
+	e.runtimeState = state
+	e.routeExclusionsByEndpoint = routeExclusionMap(state.RouteExclusions)
+	return state, nil
+}
+
+func (e *DryRunExecutor) storePath() string {
+	path, err := e.store.Path()
+	if err != nil {
+		return e.store.Root
+	}
+	return path
+}
+
+func routeExclusionMap(exclusions []routes.EndpointExclusion) map[string]routes.EndpointExclusion {
+	out := make(map[string]routes.EndpointExclusion, len(exclusions))
+	for _, exclusion := range exclusions {
+		out[exclusion.EndpointIP] = exclusion
+	}
+	return out
 }
 
 func endpointIPFromStep(step planner.Step) (string, error) {
