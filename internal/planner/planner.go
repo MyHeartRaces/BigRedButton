@@ -33,6 +33,14 @@ type Plan struct {
 	EndpointIPs        []string                   `json:"endpoint_ips,omitempty"`
 	WireGuardInterface string                     `json:"wireguard_interface,omitempty"`
 	RuntimeRoot        string                     `json:"runtime_root,omitempty"`
+	SessionID          string                     `json:"session_id,omitempty"`
+	AppID              string                     `json:"app_id,omitempty"`
+	Namespace          string                     `json:"namespace,omitempty"`
+	HostVeth           string                     `json:"host_veth,omitempty"`
+	NamespaceVeth      string                     `json:"namespace_veth,omitempty"`
+	HostAddress        string                     `json:"host_address,omitempty"`
+	NamespaceAddress   string                     `json:"namespace_address,omitempty"`
+	HostGateway        string                     `json:"host_gateway,omitempty"`
 	Warnings           []string                   `json:"warnings,omitempty"`
 	Steps              []Step                     `json:"steps"`
 	RouteExclusions    []routes.EndpointExclusion `json:"route_exclusions,omitempty"`

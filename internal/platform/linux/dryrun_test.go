@@ -178,6 +178,48 @@ func TestDryRunExecutorPersistsRuntimeStateAndDisconnectDeletesRoutes(t *testing
 	}
 }
 
+func TestDryRunExecutorRecordsIsolatedAppCommands(t *testing.T) {
+	config, err := profile.LoadFile("../../../testdata/profiles/valid-wgws.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := planner.IsolatedAppTunnel(config, planner.IsolatedAppOptions{
+		SessionID:   "123e4567-e89b-12d3-a456-426614174000",
+		AppCommand:  []string{"/usr/bin/curl", "https://example.com"},
+		RuntimeRoot: "/run/test-brb",
+		LaunchEnv:   []string{"DISPLAY=:1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor, err := NewDryRunExecutor(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := engine.New(executor).Run(context.Background(), plan)
+	if result.State != engine.StateConnected {
+		t.Fatalf("state = %s error = %s", result.State, result.Error)
+	}
+
+	got := dryRunOperationStrings(executor.Operations())
+	for _, want := range []string{
+		"ip netns add brb-123e4567",
+		"ip link add brbh123e4567 type veth peer name brbn123e4567",
+		"ip link set brbn123e4567 netns brb-123e4567",
+		"mkdir -p /etc/netns/brb-123e4567",
+		"wstunnel client --log-lvl INFO --http-upgrade-path-prefix cdn/ws --tls-sni-override edge.example.com -L udp://",
+		"ip netns exec brb-123e4567 ip link add dev brbwg123e4567 type wireguard",
+		"ip netns exec brb-123e4567 wg setconf brbwg123e4567 /run/test-brb/isolated/123e4567-e89b-12d3-a456-426614174000/wg-setconf.conf",
+		"ip netns exec brb-123e4567 nft -f /run/test-brb/isolated/123e4567-e89b-12d3-a456-426614174000/namespace-killswitch.nft",
+		"ip netns exec brb-123e4567 env DISPLAY=:1 /usr/bin/curl https://example.com",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in operations:\n%s", want, got)
+		}
+	}
+}
+
 func connectPlan(t *testing.T, options planner.Options) planner.Plan {
 	t.Helper()
 	config, err := profile.LoadFile("../../../testdata/profiles/valid-wgws.json")
@@ -209,4 +251,19 @@ func operationArgv(operations []Operation) [][]string {
 		argv = append(argv, operation.Command.Argv())
 	}
 	return argv
+}
+
+func dryRunOperationStrings(operations []Operation) string {
+	var builder strings.Builder
+	for _, operation := range operations {
+		if operation.Command != nil {
+			builder.WriteString(operation.Command.String())
+			builder.WriteByte('\n')
+		}
+		if operation.Runtime != "" {
+			builder.WriteString(operation.Runtime)
+			builder.WriteByte('\n')
+		}
+	}
+	return builder.String()
 }

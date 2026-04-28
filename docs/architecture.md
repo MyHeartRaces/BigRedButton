@@ -82,6 +82,11 @@ Likely implementation path:
 - restore routes and stop processes on disconnect
 - support systemd integration only after the manual lifecycle is stable
 
+For isolated app tunnel mode, the Linux backend uses a per-session network
+namespace with WireGuard inside the namespace and a host-side WSTunnel control
+process bound to the session `veth` address. This keeps host default routes and
+host DNS untouched while letting the namespace fail closed.
+
 ## Windows Backend
 
 Windows is the second platform and the first external tester target.

@@ -3,6 +3,7 @@ package desktop
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,23 +40,29 @@ type guiState struct {
 	ProfilePath     string `json:"profile_path,omitempty"`
 	EndpointIP      string `json:"endpoint_ip,omitempty"`
 	WSTunnelBinary  string `json:"wstunnel_binary,omitempty"`
+	IsolatedSession string `json:"isolated_session,omitempty"`
+	IsolatedCommand string `json:"isolated_command,omitempty"`
 	LastCommand     string `json:"last_command,omitempty"`
 	LastCommandTime string `json:"last_command_time,omitempty"`
 	LastOutput      string `json:"last_output,omitempty"`
 }
 
 type statusResponse struct {
-	OS        string           `json:"os"`
-	GUI       guiState         `json:"gui"`
-	Runtime   status.Snapshot  `json:"runtime"`
-	Profile   *profile.Summary `json:"profile,omitempty"`
-	ProfileOK bool             `json:"profile_ok"`
-	Error     string           `json:"error,omitempty"`
+	OS               string                           `json:"os"`
+	GUI              guiState                         `json:"gui"`
+	Runtime          status.Snapshot                  `json:"runtime"`
+	Isolated         *status.Snapshot                 `json:"isolated,omitempty"`
+	IsolatedSessions []status.IsolatedSessionSnapshot `json:"isolated_sessions,omitempty"`
+	Profile          *profile.Summary                 `json:"profile,omitempty"`
+	ProfileOK        bool                             `json:"profile_ok"`
+	Error            string                           `json:"error,omitempty"`
 }
 
 type actionRequest struct {
 	EndpointIP     string `json:"endpoint_ip"`
 	WSTunnelBinary string `json:"wstunnel_binary"`
+	SessionID      string `json:"session_id"`
+	AppCommand     string `json:"app_command"`
 }
 
 type actionResponse struct {
@@ -95,6 +102,9 @@ func Run(ctx context.Context, options Options) error {
 	mux.HandleFunc("/api/profile", a.profile)
 	mux.HandleFunc("/api/connect", a.connect)
 	mux.HandleFunc("/api/disconnect", a.disconnect)
+	mux.HandleFunc("/api/isolated/start", a.isolatedStart)
+	mux.HandleFunc("/api/isolated/stop", a.isolatedStop)
+	mux.HandleFunc("/api/isolated/cleanup", a.isolatedCleanup)
 
 	addr := strings.TrimSpace(options.Addr)
 	if addr == "" {
@@ -273,12 +283,144 @@ func (a *app) disconnect(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, response)
 }
 
+func (a *app) isolatedStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	request, err := decodeAction(r.Body)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
+		return
+	}
+	if stdruntime.GOOS != "linux" {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app mode is implemented only on Linux"})
+		return
+	}
+	state := a.loadState()
+	if strings.TrimSpace(state.ProfilePath) == "" {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "upload a profile first"})
+		return
+	}
+	if strings.TrimSpace(request.WSTunnelBinary) != "" {
+		state.WSTunnelBinary = strings.TrimSpace(request.WSTunnelBinary)
+	}
+	if strings.TrimSpace(request.SessionID) != "" {
+		state.IsolatedSession = strings.TrimSpace(request.SessionID)
+	}
+	if strings.TrimSpace(state.IsolatedSession) == "" {
+		sessionID, err := newUUID()
+		if err != nil {
+			writeJSONStatus(w, http.StatusInternalServerError, actionResponse{Error: "generate session UUID: " + err.Error()})
+			return
+		}
+		state.IsolatedSession = sessionID
+	}
+	if strings.TrimSpace(request.AppCommand) != "" {
+		state.IsolatedCommand = strings.TrimSpace(request.AppCommand)
+	}
+	command, err := splitCommandLine(state.IsolatedCommand)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
+		return
+	}
+	if len(command) == 0 {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "app command is required"})
+		return
+	}
+
+	args := []string{"linux-isolated-app", "-yes", "-session-id", state.IsolatedSession}
+	if strings.TrimSpace(state.WSTunnelBinary) != "" {
+		args = append(args, "-wstunnel-binary", state.WSTunnelBinary)
+	}
+	for _, env := range desktopLaunchEnv() {
+		args = append(args, "-app-env", env)
+	}
+	args = append(args, state.ProfilePath, "--")
+	args = append(args, command...)
+	response := a.runCLI(r.Context(), "isolated app start", args)
+	state.LastCommand = "isolated-start"
+	state.LastCommandTime = time.Now().Format(time.RFC3339)
+	state.LastOutput = response.Output
+	_ = a.saveState(state)
+	writeJSON(w, response)
+}
+
+func (a *app) isolatedStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	request, err := decodeAction(r.Body)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
+		return
+	}
+	if stdruntime.GOOS != "linux" {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app mode is implemented only on Linux"})
+		return
+	}
+	state := a.loadState()
+	if strings.TrimSpace(request.SessionID) != "" {
+		state.IsolatedSession = strings.TrimSpace(request.SessionID)
+	}
+	if strings.TrimSpace(state.IsolatedSession) == "" {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated session UUID is required"})
+		return
+	}
+	response := a.runCLI(r.Context(), "isolated app stop", []string{"linux-stop-isolated-app", "-yes", "-session-id", state.IsolatedSession})
+	state.LastCommand = "isolated-stop"
+	state.LastCommandTime = time.Now().Format(time.RFC3339)
+	state.LastOutput = response.Output
+	_ = a.saveState(state)
+	writeJSON(w, response)
+}
+
+func (a *app) isolatedCleanup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	request, err := decodeAction(r.Body)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
+		return
+	}
+	if stdruntime.GOOS != "linux" {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app cleanup is implemented only on Linux"})
+		return
+	}
+	state := a.loadState()
+	if strings.TrimSpace(request.SessionID) != "" {
+		state.IsolatedSession = strings.TrimSpace(request.SessionID)
+	}
+	if strings.TrimSpace(state.IsolatedSession) == "" {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated session UUID is required"})
+		return
+	}
+	response := a.runCLI(r.Context(), "isolated app cleanup", []string{"linux-cleanup-isolated-app", "-yes", "-session-id", state.IsolatedSession})
+	state.LastCommand = "isolated-cleanup"
+	state.LastCommandTime = time.Now().Format(time.RFC3339)
+	state.LastOutput = response.Output
+	_ = a.saveState(state)
+	writeJSON(w, response)
+}
+
 func (a *app) statusPayload(ctx context.Context) statusResponse {
 	state := a.loadState()
 	response := statusResponse{
 		OS:      stdruntime.GOOS,
 		GUI:     state,
 		Runtime: status.FromStore(ctx, truntime.Store{Root: planner.DefaultRuntimeRoot}),
+	}
+	if strings.TrimSpace(state.IsolatedSession) != "" {
+		isolated := status.FromStore(ctx, truntime.Store{Root: filepath.Join(planner.DefaultRuntimeRoot, planner.DefaultIsolatedRuntimeSubdir, state.IsolatedSession)})
+		response.Isolated = &isolated
+	}
+	if sessions, err := status.IsolatedSessions(ctx, planner.DefaultRuntimeRoot); err == nil {
+		response.IsolatedSessions = sessions
+	} else {
+		response.Error = "list isolated sessions: " + err.Error()
 	}
 	if strings.TrimSpace(state.ProfilePath) == "" {
 		return response
@@ -365,7 +507,83 @@ func decodeAction(reader io.Reader) (actionRequest, error) {
 	}
 	request.EndpointIP = strings.TrimSpace(request.EndpointIP)
 	request.WSTunnelBinary = strings.TrimSpace(request.WSTunnelBinary)
+	request.SessionID = strings.TrimSpace(request.SessionID)
+	request.AppCommand = strings.TrimSpace(request.AppCommand)
 	return request, nil
+}
+
+func desktopLaunchEnv() []string {
+	var env []string
+	for _, key := range []string{"DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "PULSE_SERVER", "PIPEWIRE_RUNTIME_DIR"} {
+		if value, ok := os.LookupEnv(key); ok && strings.TrimSpace(value) != "" && !strings.ContainsRune(value, '\x00') {
+			env = append(env, key+"="+value)
+		}
+	}
+	return env
+}
+
+func splitCommandLine(value string) ([]string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	var args []string
+	var current strings.Builder
+	var quote rune
+	escaped := false
+	flush := func() {
+		if current.Len() == 0 {
+			return
+		}
+		args = append(args, current.String())
+		current.Reset()
+	}
+	for _, r := range value {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if quote != 0 {
+			if r == quote {
+				quote = 0
+				continue
+			}
+			current.WriteRune(r)
+			continue
+		}
+		if r == '\'' || r == '"' {
+			quote = r
+			continue
+		}
+		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
+			flush()
+			continue
+		}
+		current.WriteRune(r)
+	}
+	if escaped {
+		current.WriteRune('\\')
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("app command has unterminated quote")
+	}
+	flush()
+	return args, nil
+}
+
+func newUUID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }
 
 func findCLI() (string, error) {

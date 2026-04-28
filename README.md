@@ -28,7 +28,8 @@ Implemented:
 - WireGuard `wg setconf` renderer and Linux executor
 - composite Linux lifecycle executor with rollback tests
 - guarded Linux connect/disconnect CLI commands
-- desktop GUI launcher
+- Linux isolated app tunnel planner, dry-run, guarded apply, stop and cleanup
+- desktop GUI launcher with system and Linux isolated app controls
 - Arch Linux application launcher package
 - macOS `.pkg` installer with an app bundle
 - Windows amd64 installer with Start Menu/Desktop shortcuts
@@ -37,7 +38,7 @@ Not implemented yet:
 
 - privileged daemon / IPC boundary
 - DNS adapter
-- kill switch
+- automatic isolated session crash recovery
 - Windows, macOS, or mobile ports
 
 ## Requirements
@@ -51,6 +52,8 @@ Runtime on Linux:
 
 - `iproute2`
 - `wireguard-tools`
+- `nftables` for isolated app tunnel fail-closed rules
+- `setpriv` from util-linux for launching isolated apps as the desktop user
 - `wstunnel` in `PATH`, or pass `-wstunnel-binary /path/to/wstunnel`
 - root privileges or equivalent capabilities for real connect/disconnect
 
@@ -180,6 +183,87 @@ big-red-button status
 ```
 
 By default, runtime state is stored in `/run/big-red-button/state.json`.
+
+## Linux Isolated App Tunnel
+
+This mode launches one selected process inside a Linux network namespace. It
+does not change host default routes or host DNS. The namespace gets its own
+`veth`, WireGuard interface, DNS file and namespace-only `nft` fail-closed
+rules.
+
+Plan only:
+
+```bash
+big-red-button plan-isolated-app \
+  -session-id 123e4567-e89b-12d3-a456-426614174000 \
+  /path/to/profile.json -- /usr/bin/curl https://example.com
+```
+
+Dry-run:
+
+```bash
+big-red-button linux-dry-run-isolated-app \
+  -session-id 123e4567-e89b-12d3-a456-426614174000 \
+  /path/to/profile.json -- /usr/bin/curl https://example.com
+```
+
+Real run:
+
+```bash
+sudo big-red-button linux-isolated-app \
+  -yes \
+  -session-id 123e4567-e89b-12d3-a456-426614174000 \
+  -wstunnel-binary /usr/bin/wstunnel \
+  /path/to/profile.json -- /usr/bin/curl https://example.com
+```
+
+When launched through `sudo` or `pkexec`, the CLI tries to infer the desktop
+user from `SUDO_UID`/`SUDO_GID` or `PKEXEC_UID` and launches the selected app
+with `setpriv` inside the namespace. You can override this explicitly with
+`-app-uid <uid> -app-gid <gid>`.
+
+Desktop display environment can be forwarded with repeatable
+`-app-env KEY=value`. Only display/session keys are accepted: `DISPLAY`,
+`WAYLAND_DISPLAY`, `XAUTHORITY`, `XDG_RUNTIME_DIR`,
+`DBUS_SESSION_BUS_ADDRESS`, `PULSE_SERVER`, and `PIPEWIRE_RUNTIME_DIR`. The GUI
+forwards those keys automatically when they are present.
+
+Stop and cleanup:
+
+```bash
+sudo big-red-button linux-stop-isolated-app \
+  -yes \
+  -session-id 123e4567-e89b-12d3-a456-426614174000
+```
+
+If a session is already dirty and runtime state is missing or stale, run the
+best-effort cleanup command for the same session UUID:
+
+```bash
+sudo big-red-button linux-cleanup-isolated-app \
+  -yes \
+  -session-id 123e4567-e89b-12d3-a456-426614174000
+```
+
+Status:
+
+```bash
+big-red-button isolated-status \
+  -session-id 123e4567-e89b-12d3-a456-426614174000
+```
+
+List all known isolated runtime sessions:
+
+```bash
+big-red-button isolated-sessions
+```
+
+On Linux, isolated status marks a session `Dirty` if saved app or WSTunnel PIDs
+are no longer present in `/proc`; use stop first, then cleanup if normal stop
+cannot finish.
+
+Isolated session state is stored under
+`/run/big-red-button/isolated/<session-id>/state.json`.
 
 ## Profile
 

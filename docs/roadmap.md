@@ -83,6 +83,7 @@ Scope:
 - session-only fail-closed behavior
 - cleanup and crash recovery
 - Linux network namespace backend prototype
+- Linux isolated app plan and dry-run command sequence
 - Windows service/WFP feasibility spike
 - macOS Network Extension feasibility spike
 

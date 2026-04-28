@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	stdruntime "runtime"
 	"strings"
 	"testing"
@@ -182,6 +183,79 @@ func TestLoadRejectsInvalidState(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "profile fingerprint is required") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestListIsolatedSessions(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	validSessionID := "123e4567-e89b-12d3-a456-426614174000"
+	validRoot := filepath.Join(runtimeRoot, planner.DefaultIsolatedRuntimeSubdir, validSessionID)
+	err := (Store{Root: validRoot}).Save(context.Background(), State{
+		Version:            StateVersion,
+		Mode:               planner.IsolatedAppTunnelKind,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "brbwg123e4567",
+		SessionID:          validSessionID,
+		Namespace:          "brb-123e4567",
+		HostVeth:           "brbh123e4567",
+		NamespaceVeth:      "brbn123e4567",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dirtySessionID := "223e4567-e89b-12d3-a456-426614174000"
+	dirtyRoot := filepath.Join(runtimeRoot, planner.DefaultIsolatedRuntimeSubdir, dirtySessionID)
+	if err := os.MkdirAll(dirtyRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dirtyRoot, DefaultStateFileName), []byte(`{"version":1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runtimeRoot, planner.DefaultIsolatedRuntimeSubdir, "not-a-session-file"), []byte("ignored"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mismatchedSessionID := "323e4567-e89b-12d3-a456-426614174000"
+	mismatchedRoot := filepath.Join(runtimeRoot, planner.DefaultIsolatedRuntimeSubdir, mismatchedSessionID)
+	err = (Store{Root: mismatchedRoot}).Save(context.Background(), State{
+		Version:            StateVersion,
+		Mode:               planner.IsolatedAppTunnelKind,
+		ProfileFingerprint: "def456",
+		WireGuardInterface: "brbwg323e4567",
+		SessionID:          validSessionID,
+		Namespace:          "brb-323e4567",
+		HostVeth:           "brbh323e4567",
+		NamespaceVeth:      "brbn323e4567",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, err := ListIsolatedSessions(context.Background(), runtimeRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 3 {
+		t.Fatalf("sessions = %#v", sessions)
+	}
+	if sessions[0].SessionID != validSessionID || sessions[0].State == nil || sessions[0].Error != "" {
+		t.Fatalf("valid session = %#v", sessions[0])
+	}
+	if sessions[1].SessionID != dirtySessionID || sessions[1].State != nil || !strings.Contains(sessions[1].Error, "profile fingerprint is required") {
+		t.Fatalf("dirty session = %#v", sessions[1])
+	}
+	if sessions[2].SessionID != mismatchedSessionID || sessions[2].State != nil || !strings.Contains(sessions[2].Error, "does not match directory") {
+		t.Fatalf("mismatched session = %#v", sessions[2])
+	}
+}
+
+func TestListIsolatedSessionsMissingRoot(t *testing.T) {
+	sessions, err := ListIsolatedSessions(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("sessions = %#v", sessions)
 	}
 }
 

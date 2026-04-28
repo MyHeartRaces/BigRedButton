@@ -3,11 +3,14 @@ package linux
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 	"github.com/MyHeartRaces/BigRedButton/internal/routes"
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
+	"github.com/MyHeartRaces/BigRedButton/internal/supervisor"
 )
 
 type OperationPhase string
@@ -158,6 +161,166 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 		} else {
 			e.recordRuntime(OperationApply, step.ID, "would clear "+e.storePath())
 		}
+	case step.ID == "create-isolated-runtime-root":
+		e.recordRuntime(OperationApply, step.ID, "would create "+requiredDetailValue(step, "session_runtime_root"))
+	case step.ID == "validate-linux-prerequisites":
+		for _, binary := range detailValues(step, "binary") {
+			e.recordRuntime(OperationApply, step.ID, "require "+binary)
+		}
+	case step.ID == "create-netns":
+		command, err := NetNSAddCommand(requiredDetailValue(step, "namespace"))
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "create-veth-pair":
+		hostVeth := requiredDetailValue(step, "host_veth")
+		namespaceVeth := requiredDetailValue(step, "namespace_veth")
+		namespace := requiredDetailValue(step, "namespace")
+		command, err := VethCreateCommand(hostVeth, namespaceVeth)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+		command, err = LinkSetNetNSCommand(namespaceVeth, namespace)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "configure-host-veth":
+		hostVeth := requiredDetailValue(step, "host_veth")
+		command, err := AddressReplaceCommand(hostVeth, requiredDetailValue(step, "host_address"))
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+		command, err = LinkSetUpCommand(hostVeth)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "configure-namespace-veth":
+		namespace := requiredDetailValue(step, "namespace")
+		namespaceVeth := requiredDetailValue(step, "namespace_veth")
+		command, err := NetNSAddressReplaceCommand(namespace, namespaceVeth, requiredDetailValue(step, "namespace_address"))
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+		command, err = NetNSLinkSetUpCommand(namespace, namespaceVeth)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+		command, err = NetNSLoopbackSetUpCommand(namespace)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "configure-namespace-dns":
+		namespace := requiredDetailValue(step, "namespace")
+		e.record(OperationApply, step.ID, Command{Name: "mkdir", Args: []string{"-p", filepath.Join("/etc/netns", namespace)}})
+		e.recordRuntime(OperationApply, step.ID, "write "+filepath.Join("/etc/netns", namespace, "resolv.conf")+" "+strings.Join(detailValues(step, "dns"), ","))
+	case step.ID == "start-wstunnel-control":
+		command, err := wstunnelControlCommandFromStep(step)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "create-wireguard-interface-in-netns":
+		command, err := namespacedWireGuardCommand(step, WireGuardCreateInterfaceCommand)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "apply-wireguard-addresses-in-netns":
+		namespace := requiredDetailValue(step, "namespace")
+		iface := requiredDetailValue(step, "interface")
+		for _, address := range detailValues(step, "address") {
+			command, err := WireGuardAddAddressCommand(iface, address)
+			if err != nil {
+				return err
+			}
+			command, err = NetNSExecCommand(namespace, command)
+			if err != nil {
+				return err
+			}
+			e.record(OperationApply, step.ID, command)
+		}
+		mtu, err := strconv.Atoi(requiredDetailValue(step, "mtu"))
+		if err != nil {
+			return fmt.Errorf("wireguard MTU detail is invalid: %w", err)
+		}
+		command, err := WireGuardSetMTUCommand(iface, mtu)
+		if err != nil {
+			return err
+		}
+		command, err = NetNSExecCommand(namespace, command)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+		command, err = WireGuardSetUpCommand(iface)
+		if err != nil {
+			return err
+		}
+		command, err = NetNSExecCommand(namespace, command)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "apply-wireguard-peer-in-netns":
+		namespace := requiredDetailValue(step, "namespace")
+		iface := requiredDetailValue(step, "interface")
+		configPath := filepath.Join(requiredDetailValue(step, "session_runtime_root"), "wg-setconf.conf")
+		e.recordRuntime(OperationApply, step.ID, "write redacted WireGuard setconf "+configPath)
+		command, err := WireGuardSetConfigCommand(iface, configPath)
+		if err != nil {
+			return err
+		}
+		command, err = NetNSExecCommand(namespace, command)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "apply-namespace-client-routes":
+		namespace := requiredDetailValue(step, "namespace")
+		iface := requiredDetailValue(step, "interface")
+		for _, allowedIP := range detailValues(step, "allowed_ip") {
+			command, err := WireGuardRouteReplaceCommand(iface, allowedIP)
+			if err != nil {
+				return err
+			}
+			command, err = NetNSExecCommand(namespace, command)
+			if err != nil {
+				return err
+			}
+			e.record(OperationApply, step.ID, command)
+		}
+	case step.ID == "apply-namespace-kill-switch":
+		namespace := requiredDetailValue(step, "namespace")
+		rulesetPath := filepath.Join(requiredDetailValue(step, "session_runtime_root"), "namespace-killswitch.nft")
+		e.recordRuntime(OperationApply, step.ID, "write namespace fail-closed nft ruleset "+rulesetPath)
+		command, err := NftApplyRulesetCommand(rulesetPath)
+		if err != nil {
+			return err
+		}
+		command, err = NetNSExecCommand(namespace, command)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "launch-app-in-netns":
+		command, err := isolatedAppLaunchCommandFromStep(step)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
+	case step.ID == "monitor-process-tree":
+		e.recordRuntime(OperationApply, step.ID, "monitor process tree for session "+requiredDetailValue(step, "session_id"))
+	case step.ID == "store-isolated-runtime-state":
+		path := filepath.Join(requiredDetailValue(step, "session_runtime_root"), "state.json")
+		e.recordRuntime(OperationApply, step.ID, "would save "+path)
 	}
 	return nil
 }
@@ -165,6 +328,13 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 func (e *DryRunExecutor) Rollback(_ context.Context, step planner.Step) error {
 	if e == nil {
 		return fmt.Errorf("linux dry-run executor is nil")
+	}
+	if !strings.HasPrefix(step.ID, "add-route-exclusion-") && !strings.Contains(step.ID, "netns") && !strings.Contains(step.ID, "veth") && !strings.Contains(step.ID, "wireguard") && !strings.Contains(step.ID, "wstunnel") && !strings.Contains(step.ID, "kill-switch") && !strings.Contains(step.ID, "dns") && step.ID != "create-isolated-runtime-root" && step.ID != "launch-app-in-netns" && step.ID != "store-isolated-runtime-state" {
+		return nil
+	}
+
+	if err := e.rollbackIsolatedStep(step); err != nil {
+		return err
 	}
 	if !strings.HasPrefix(step.ID, "add-route-exclusion-") {
 		return nil
@@ -295,4 +465,129 @@ func endpointIPFromStep(step planner.Step) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("step %s does not contain endpoint_ip detail", step.ID)
+}
+
+func (e *DryRunExecutor) rollbackIsolatedStep(step planner.Step) error {
+	switch step.ID {
+	case "create-isolated-runtime-root":
+		e.recordRuntime(OperationRollback, step.ID, "would remove "+requiredDetailValue(step, "session_runtime_root"))
+	case "create-netns":
+		command, err := NetNSDeleteCommand(requiredDetailValue(step, "namespace"))
+		if err != nil {
+			return err
+		}
+		e.record(OperationRollback, step.ID, command)
+	case "create-veth-pair", "configure-host-veth":
+		command, err := LinkDeleteCommand(requiredDetailValue(step, "host_veth"))
+		if err != nil {
+			return err
+		}
+		e.record(OperationRollback, step.ID, command)
+	case "configure-namespace-dns":
+		namespace := requiredDetailValue(step, "namespace")
+		e.recordRuntime(OperationRollback, step.ID, "remove "+filepath.Join("/etc/netns", namespace, "resolv.conf"))
+	case "start-wstunnel-control":
+		e.recordRuntime(OperationRollback, step.ID, "stop WSTunnel control process")
+	case "create-wireguard-interface-in-netns", "apply-wireguard-addresses-in-netns", "apply-wireguard-peer-in-netns":
+		namespace := requiredDetailValue(step, "namespace")
+		iface := requiredDetailValue(step, "interface")
+		command, err := WireGuardDeleteInterfaceCommand(iface)
+		if err != nil {
+			return err
+		}
+		command, err = NetNSExecCommand(namespace, command)
+		if err != nil {
+			return err
+		}
+		e.record(OperationRollback, step.ID, command)
+	case "apply-namespace-client-routes":
+		namespace := requiredDetailValue(step, "namespace")
+		iface := requiredDetailValue(step, "interface")
+		for _, allowedIP := range detailValues(step, "allowed_ip") {
+			command, err := WireGuardRouteDeleteCommand(iface, allowedIP)
+			if err != nil {
+				return err
+			}
+			command, err = NetNSExecCommand(namespace, command)
+			if err != nil {
+				return err
+			}
+			e.record(OperationRollback, step.ID, command)
+		}
+	case "apply-namespace-kill-switch":
+		e.recordRuntime(OperationRollback, step.ID, "remove namespace fail-closed nft ruleset")
+	case "launch-app-in-netns":
+		e.recordRuntime(OperationRollback, step.ID, "stop isolated app process tree")
+	case "store-isolated-runtime-state":
+		e.recordRuntime(OperationRollback, step.ID, "clear isolated session runtime state")
+	}
+	return nil
+}
+
+func wstunnelControlCommandFromStep(step planner.Step) (Command, error) {
+	command, err := supervisor.WSTunnelClientCommand(supervisor.WSTunnelClientConfig{
+		Binary:         requiredDetailValue(step, "binary"),
+		ServerURL:      requiredDetailValue(step, "target"),
+		PathPrefix:     detailValue(step, "path_prefix"),
+		TLSServerName:  detailValue(step, "tls_server_name"),
+		LocalUDPListen: requiredDetailValue(step, "local_udp"),
+	})
+	if err != nil {
+		return Command{}, err
+	}
+	return Command{Name: command.Name, Args: command.Args}, nil
+}
+
+func namespacedWireGuardCommand(step planner.Step, build func(string) (Command, error)) (Command, error) {
+	command, err := build(requiredDetailValue(step, "interface"))
+	if err != nil {
+		return Command{}, err
+	}
+	return NetNSExecCommand(requiredDetailValue(step, "namespace"), command)
+}
+
+func isolatedAppLaunchCommandFromStep(step planner.Step) (Command, error) {
+	executable := requiredDetailValue(step, "executable")
+	appArgs := detailValues(step, "app_arg")
+	envArgs := detailValues(step, "app_env")
+	command := Command{Name: executable, Args: appArgs}
+	if len(envArgs) > 0 {
+		args := append([]string{}, envArgs...)
+		args = append(args, executable)
+		args = append(args, appArgs...)
+		command = Command{Name: "env", Args: args}
+	}
+	uid := detailValue(step, "launch_uid")
+	gid := detailValue(step, "launch_gid")
+	if uid != "" && gid != "" {
+		args := []string{"--reuid", uid, "--regid", gid, "--init-groups", command.Name}
+		args = append(args, command.Args...)
+		command = Command{Name: "setpriv", Args: args}
+	}
+	return NetNSExecCommand(requiredDetailValue(step, "namespace"), command)
+}
+
+func detailValue(step planner.Step, key string) string {
+	prefix := key + "="
+	for _, detail := range step.Details {
+		if value, ok := strings.CutPrefix(detail, prefix); ok {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func requiredDetailValue(step planner.Step, key string) string {
+	return detailValue(step, key)
+}
+
+func detailValues(step planner.Step, key string) []string {
+	prefix := key + "="
+	var values []string
+	for _, detail := range step.Details {
+		if value, ok := strings.CutPrefix(detail, prefix); ok {
+			values = append(values, strings.TrimSpace(value))
+		}
+	}
+	return values
 }

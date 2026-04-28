@@ -106,6 +106,154 @@ func TestDisconnectPlan(t *testing.T) {
 	}
 }
 
+func TestIsolatedAppTunnelPlan(t *testing.T) {
+	config := loadValidProfile(t)
+
+	plan, err := IsolatedAppTunnel(config, IsolatedAppOptions{
+		SessionID:   "123e4567-e89b-12d3-a456-426614174000",
+		AppCommand:  []string{"/usr/bin/curl", "https://example.com"},
+		RuntimeRoot: "/run/test-brb",
+	})
+	if err != nil {
+		t.Fatalf("IsolatedAppTunnel() error = %v", err)
+	}
+
+	if plan.Kind != IsolatedAppTunnelKind {
+		t.Fatalf("unexpected plan kind: %s", plan.Kind)
+	}
+	if plan.Namespace != "brb-123e4567" {
+		t.Fatalf("unexpected namespace: %s", plan.Namespace)
+	}
+	if plan.HostVeth != "brbh123e4567" || plan.NamespaceVeth != "brbn123e4567" {
+		t.Fatalf("unexpected veth names: host=%s namespace=%s", plan.HostVeth, plan.NamespaceVeth)
+	}
+	for _, id := range []string{
+		"create-netns",
+		"validate-linux-prerequisites",
+		"create-veth-pair",
+		"configure-namespace-dns",
+		"start-wstunnel-control",
+		"create-wireguard-interface-in-netns",
+		"apply-namespace-kill-switch",
+		"launch-app-in-netns",
+		"store-isolated-runtime-state",
+	} {
+		if !hasStep(plan, id) {
+			t.Fatalf("missing step %s: %#v", id, plan.Steps)
+		}
+	}
+	if !strings.Contains(strings.Join(plan.Warnings, "\n"), "host default routes and host DNS unchanged") {
+		t.Fatalf("missing host network invariant warning: %#v", plan.Warnings)
+	}
+	assertPlanHasNoSecret(t, plan, config.WireGuardPrivateKey)
+	assertPlanHasNoSecret(t, plan, config.ServerPublicKey)
+	assertPlanHasNoSecret(t, plan, config.PresharedKey)
+}
+
+func TestIsolatedAppTunnelRequiresSessionUUID(t *testing.T) {
+	config := loadValidProfile(t)
+
+	_, err := IsolatedAppTunnel(config, IsolatedAppOptions{
+		SessionID:  "manual",
+		AppCommand: []string{"/usr/bin/curl"},
+	})
+	if err == nil {
+		t.Fatal("expected invalid session UUID error")
+	}
+	if !strings.Contains(err.Error(), "session ID must be an RFC 4122 UUID") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestIsolatedAppTunnelLaunchEnv(t *testing.T) {
+	config := loadValidProfile(t)
+
+	_, err := IsolatedAppTunnel(config, IsolatedAppOptions{
+		SessionID:  "123e4567-e89b-12d3-a456-426614174000",
+		AppCommand: []string{"/usr/bin/firefox"},
+		LaunchEnv:  []string{"UNSAFE=value"},
+	})
+	if err == nil {
+		t.Fatal("expected unsafe launch env error")
+	}
+
+	plan, err := IsolatedAppTunnel(config, IsolatedAppOptions{
+		SessionID:  "123e4567-e89b-12d3-a456-426614174000",
+		AppCommand: []string{"/usr/bin/firefox"},
+		LaunchEnv:  []string{"DISPLAY=:1", "XDG_RUNTIME_DIR=/run/user/1000"},
+	})
+	if err != nil {
+		t.Fatalf("IsolatedAppTunnel() error = %v", err)
+	}
+	step := findStep(plan, "launch-app-in-netns")
+	details := strings.Join(step.Details, "\n")
+	if !strings.Contains(details, "app_env=DISPLAY=:1") || !strings.Contains(details, "app_env=XDG_RUNTIME_DIR=/run/user/1000") {
+		t.Fatalf("launch details = %#v", step.Details)
+	}
+}
+
+func TestIsolatedAppStopPlan(t *testing.T) {
+	plan, err := IsolatedAppStop(IsolatedAppStopOptions{
+		SessionID:   "123e4567-e89b-12d3-a456-426614174000",
+		RuntimeRoot: "/run/test-brb",
+	})
+	if err != nil {
+		t.Fatalf("IsolatedAppStop() error = %v", err)
+	}
+	if plan.Kind != IsolatedAppStopKind {
+		t.Fatalf("unexpected plan kind: %s", plan.Kind)
+	}
+	if plan.SessionID != "123e4567-e89b-12d3-a456-426614174000" {
+		t.Fatalf("unexpected session ID: %s", plan.SessionID)
+	}
+	for _, id := range []string{
+		"read-isolated-runtime-state",
+		"stop-isolated-app",
+		"remove-namespace-kill-switch",
+		"remove-namespace-client-routes",
+		"remove-wireguard-interface-in-netns",
+		"stop-wstunnel-control",
+		"remove-namespace-dns",
+		"delete-netns",
+		"clear-isolated-runtime-state",
+	} {
+		if !hasStep(plan, id) {
+			t.Fatalf("missing step %s: %#v", id, plan.Steps)
+		}
+	}
+}
+
+func TestIsolatedAppCleanupPlan(t *testing.T) {
+	plan, err := IsolatedAppCleanup(IsolatedAppStopOptions{
+		SessionID:   "123e4567-e89b-12d3-a456-426614174000",
+		RuntimeRoot: "/run/test-brb",
+	})
+	if err != nil {
+		t.Fatalf("IsolatedAppCleanup() error = %v", err)
+	}
+	if plan.Kind != IsolatedAppCleanupKind {
+		t.Fatalf("unexpected plan kind: %s", plan.Kind)
+	}
+	if plan.Namespace != "brb-123e4567" || plan.HostVeth != "brbh123e4567" {
+		t.Fatalf("unexpected cleanup names: namespace=%s host_veth=%s", plan.Namespace, plan.HostVeth)
+	}
+	if plan.WireGuardInterface != "brbwg123e4567" {
+		t.Fatalf("wireguard interface = %s", plan.WireGuardInterface)
+	}
+	for _, id := range []string{
+		"cleanup-isolated-processes",
+		"cleanup-namespace-kill-switch",
+		"cleanup-wireguard-interface-in-netns",
+		"cleanup-netns",
+		"cleanup-namespace-dns",
+		"cleanup-isolated-runtime-root",
+	} {
+		if !hasStep(plan, id) {
+			t.Fatalf("missing step %s: %#v", id, plan.Steps)
+		}
+	}
+}
+
 func assertPlanHasNoSecret(t *testing.T, plan Plan, secret string) {
 	t.Helper()
 	if secret == "" {

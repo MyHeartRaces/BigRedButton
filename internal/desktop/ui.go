@@ -174,6 +174,10 @@ const indexHTML = `<!doctype html>
       box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 2px 0 #650b13;
     }
     button.primary:hover { background: var(--accent-dark); }
+    button.danger {
+      border-color: var(--accent-dark);
+      color: var(--accent-dark);
+    }
     button:disabled {
       opacity: 0.5;
       cursor: default;
@@ -279,6 +283,23 @@ const indexHTML = `<!doctype html>
         </div>
       </section>
 
+      <section>
+        <h2>Isolated App</h2>
+        <label>
+          Session UUID
+          <input id="isolated-session" autocomplete="off" placeholder="auto-generated">
+        </label>
+        <label>
+          App command
+          <input id="isolated-command" autocomplete="off" placeholder="/usr/bin/curl https://example.com">
+        </label>
+        <div class="row">
+          <button class="primary" id="isolated-start" type="button">Start App</button>
+          <button id="isolated-stop" type="button">Stop App</button>
+          <button class="danger" id="isolated-cleanup" type="button">Cleanup</button>
+        </div>
+      </section>
+
       <section class="full">
         <h2>Status</h2>
         <div id="runtime"></div>
@@ -298,8 +319,13 @@ const indexHTML = `<!doctype html>
     const outputEl = document.getElementById('output');
     const endpointEl = document.getElementById('endpoint-ip');
     const wstunnelEl = document.getElementById('wstunnel-binary');
+    const isolatedSessionEl = document.getElementById('isolated-session');
+    const isolatedCommandEl = document.getElementById('isolated-command');
     const connectButton = document.getElementById('connect');
     const disconnectButton = document.getElementById('disconnect');
+    const isolatedStartButton = document.getElementById('isolated-start');
+    const isolatedStopButton = document.getElementById('isolated-stop');
+    const isolatedCleanupButton = document.getElementById('isolated-cleanup');
 
     function escapeHTML(value) {
       return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -320,16 +346,33 @@ const indexHTML = `<!doctype html>
     function setBusy(busy) {
       connectButton.disabled = busy;
       disconnectButton.disabled = busy;
+      isolatedStartButton.disabled = busy;
+      isolatedStopButton.disabled = busy;
+      isolatedCleanupButton.disabled = busy;
     }
 
     async function refresh() {
       const response = await fetch('/api/status');
       const data = await response.json();
-      stateEl.textContent = data.runtime.state + ' on ' + data.os;
-      stateEl.className = 'status-pill ' + (data.runtime.state === 'connected' ? 'ok' : '');
+      const sessions = data.isolated_sessions || [];
+      const isolated = data.isolated && data.isolated.active ? data.isolated.active : null;
+      const hasConnectedIsolatedSession = Boolean(isolated || sessions.find(session => {
+        const snapshot = session.snapshot || {};
+        return snapshot.state === 'Connected';
+      }));
+      const hasDirtyIsolatedSession = Boolean((data.isolated && data.isolated.state === 'Dirty') || sessions.find(session => {
+        const snapshot = session.snapshot || {};
+        return snapshot.state === 'Dirty';
+      }));
+      const effectiveState = hasConnectedIsolatedSession ? 'Isolated Connected' : (hasDirtyIsolatedSession ? 'Isolated Dirty' : data.runtime.state);
+      stateEl.textContent = effectiveState + ' on ' + data.os;
+      stateEl.className = 'status-pill ' + (effectiveState.includes('Connected') ? 'ok' : (effectiveState.includes('Dirty') ? 'warn' : ''));
 
       endpointEl.value = data.gui.endpoint_ip || endpointEl.value || '';
       wstunnelEl.value = data.gui.wstunnel_binary || wstunnelEl.value || '';
+      isolatedSessionEl.value = data.gui.isolated_session || isolatedSessionEl.value || '';
+      if (!isolatedSessionEl.value && sessions.length === 1) isolatedSessionEl.value = sessions[0].session_id || '';
+      isolatedCommandEl.value = data.gui.isolated_command || isolatedCommandEl.value || '';
       outputEl.textContent = data.gui.last_output || '';
 
       if (data.profile) {
@@ -349,6 +392,18 @@ const indexHTML = `<!doctype html>
         ['runtime root', data.runtime.runtime_root],
         ['profile fingerprint', data.runtime.active ? data.runtime.active.profile_fingerprint : ''],
         ['interface', data.runtime.active ? data.runtime.active.wireguard_interface : ''],
+        ['isolated state', data.isolated ? data.isolated.state : ''],
+        ['isolated root', data.isolated ? data.isolated.runtime_root : ''],
+        ['isolated session', isolated ? isolated.session_id : ''],
+        ['isolated namespace', isolated ? isolated.namespace : ''],
+        ['isolated app pid', isolated && isolated.app_process ? isolated.app_process.pid : ''],
+        ['isolated gateway pid', isolated && isolated.wstunnel_process ? isolated.wstunnel_process.pid : ''],
+        ['isolated error', data.isolated ? data.isolated.error || '' : ''],
+        ['known isolated sessions', sessions.length ? sessions.map(session => {
+          const snapshot = session.snapshot || {};
+          const active = snapshot.active || {};
+          return session.session_id + ' ' + snapshot.state + (active.namespace ? ' ' + active.namespace : '');
+        }).join(', ') : ''],
         ['error', data.runtime.error || '']
       ]);
     }
@@ -378,7 +433,9 @@ const indexHTML = `<!doctype html>
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             endpoint_ip: endpointEl.value,
-            wstunnel_binary: wstunnelEl.value
+            wstunnel_binary: wstunnelEl.value,
+            session_id: isolatedSessionEl.value,
+            app_command: isolatedCommandEl.value
           })
         });
         const data = await response.json();
@@ -391,6 +448,9 @@ const indexHTML = `<!doctype html>
 
     connectButton.addEventListener('click', () => action('/api/connect'));
     disconnectButton.addEventListener('click', () => action('/api/disconnect'));
+    isolatedStartButton.addEventListener('click', () => action('/api/isolated/start'));
+    isolatedStopButton.addEventListener('click', () => action('/api/isolated/stop'));
+    isolatedCleanupButton.addEventListener('click', () => action('/api/isolated/cleanup'));
     document.getElementById('refresh').addEventListener('click', refresh);
     refresh().catch(error => { outputEl.textContent = error.message; });
   </script>

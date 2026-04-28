@@ -77,9 +77,9 @@ func (e *Engine) Run(ctx context.Context, plan planner.Plan) Result {
 	}
 
 	switch plan.Kind {
-	case "connect":
+	case "connect", planner.IsolatedAppTunnelKind:
 		return e.runConnect(ctx, plan)
-	case "disconnect":
+	case "disconnect", planner.IsolatedAppStopKind, planner.IsolatedAppCleanupKind:
 		return e.runDisconnect(ctx, plan)
 	default:
 		return Result{

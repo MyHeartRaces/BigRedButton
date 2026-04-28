@@ -85,8 +85,7 @@ The helper owns the session lifecycle:
 ```text
 CreateSession
   -> PrepareIsolation
-  -> ResolveEndpoint
-  -> StartTunnelHelper
+  -> StartControlPath
   -> StartWireGuard
   -> ApplySessionOnlyKillSwitch
   -> LaunchApp
@@ -119,17 +118,24 @@ The preferred Linux backend is network namespace isolation:
 
 - create a per-session network namespace
 - create a scoped `veth` pair between host and namespace
-- run the tunnel helper inside the namespace or route its data plane through
-  namespace-local interfaces
+- run the WSTunnel control process in the host namespace, bound only to the
+  host-side `veth` address for the session
 - configure WireGuard inside the namespace
-- set the namespace default route through WireGuard
+- point the namespace WireGuard peer at the host-side WSTunnel UDP listener
+- set the namespace client routes through WireGuard
 - configure DNS through namespace-local resolver state
 - apply the kill switch only inside the namespace
 - launch and monitor the selected app process tree inside the namespace
 - clean up the namespace, veth pair, processes and rules on exit
+- when a privileged CLI/helper creates the namespace, drop the selected app
+  process back to the requesting desktop UID/GID instead of running it as root
+- forward only allowlisted desktop/session environment variables required for
+  GUI applications to reach the user's display/session bus
 
-The root namespace should remain untouched except for minimal, tagged
-forwarding/NAT/control-path objects required for the specific session.
+This first Linux design deliberately avoids changing host default routes, host
+DNS, and global forwarding/NAT. The root namespace is touched only by
+launcher-owned, session-tagged control-path objects: the host-side `veth`
+address and the WSTunnel process that listens on it.
 
 The alternate UID-based design is an acceptable fallback only if network
 namespace integration blocks the first Linux prototype. It is weaker because it
@@ -204,3 +210,35 @@ An isolated app tunnel implementation is acceptable only when:
 - disconnect and crash recovery clean up launcher-owned state
 - diagnostics can explain failures without leaking secrets
 - platform-specific limitations are explicit in the UI and documentation
+
+## Current Implementation Slice
+
+The repository currently includes the first Linux implementation slice:
+
+- `plan-isolated-app` builds the isolated session plan.
+- `linux-dry-run-isolated-app` records the concrete Linux command sequence for
+  namespace, veth, WSTunnel, WireGuard, namespace DNS, namespace kill-switch and
+  app launch.
+- `linux-isolated-app -yes` executes the guarded Linux session lifecycle.
+  It accepts repeatable `-app-env KEY=value` for allowlisted desktop/session
+  environment forwarding, and the GUI passes those values automatically.
+- `linux-stop-isolated-app -yes` stops launcher-owned app/WSTunnel processes,
+  enumerates remaining namespace PIDs with `ip netns pids`, removes namespace
+  routes, flushes namespace firewall rules, removes namespace DNS, deletes the
+  network namespace and clears runtime state.
+- `linux-cleanup-isolated-app -yes` is the best-effort recovery path for a
+  known session UUID when normal runtime state is missing or stale. It uses the
+  deterministic launcher-owned namespace, veth and WireGuard names derived from
+  that UUID, ignores already-missing objects, removes namespace DNS and clears
+  the session runtime root.
+- `isolated-sessions` lists every runtime session directory under the isolated
+  runtime root, including dirty entries whose `state.json` cannot be loaded,
+  so the GUI and CLI can surface recovery targets after a crash.
+- Linux status checks mark isolated sessions dirty when saved app or WSTunnel
+  PIDs are no longer present in `/proc`, instead of reporting dead sessions as
+  connected.
+
+This is still early helper-level functionality. The GUI can start, stop and
+best-effort clean up a Linux isolated session through the CLI, but automatic
+crash recovery on next startup and the final privileged daemon/IPC boundary are
+not complete.

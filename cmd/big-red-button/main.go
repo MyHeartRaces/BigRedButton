@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	userpkg "os/user"
+	"path/filepath"
 	stdruntime "runtime"
+	"strings"
 
 	"github.com/MyHeartRaces/BigRedButton/internal/engine"
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
@@ -35,16 +38,34 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return validateProfile(args[1:], stdout, stderr)
 	case "plan-connect":
 		return planConnect(args[1:], stdout, stderr)
+	case "plan-isolated-app":
+		return planIsolatedApp(args[1:], stdout, stderr)
+	case "plan-isolated-stop":
+		return planIsolatedStop(args[1:], stdout, stderr)
+	case "plan-isolated-cleanup":
+		return planIsolatedCleanup(args[1:], stdout, stderr)
 	case "plan-disconnect":
 		return planDisconnect(args[1:], stdout, stderr)
 	case "status":
 		return printStatus(args[1:], stdout, stderr)
+	case "isolated-status":
+		return printIsolatedStatus(args[1:], stdout, stderr)
+	case "isolated-sessions":
+		return printIsolatedSessions(args[1:], stdout, stderr)
 	case "linux-dry-run-connect":
 		return linuxDryRunConnect(args[1:], stdout, stderr)
+	case "linux-dry-run-isolated-app":
+		return linuxDryRunIsolatedApp(args[1:], stdout, stderr)
 	case "linux-dry-run-disconnect":
 		return linuxDryRunDisconnect(args[1:], stdout, stderr)
 	case "linux-connect":
 		return linuxConnect(args[1:], stdout, stderr)
+	case "linux-isolated-app":
+		return linuxIsolatedApp(args[1:], stdout, stderr)
+	case "linux-stop-isolated-app":
+		return linuxStopIsolatedApp(args[1:], stdout, stderr)
+	case "linux-cleanup-isolated-app":
+		return linuxCleanupIsolatedApp(args[1:], stdout, stderr)
 	case "linux-disconnect":
 		return linuxDisconnect(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
@@ -147,6 +168,81 @@ func planConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
+func planIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("plan-isolated-app", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	options := isolatedAppFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() < 2 {
+		fmt.Fprintln(stderr, "usage: big-red-button plan-isolated-app [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+		return 2
+	}
+
+	config, err := profile.LoadFile(fs.Arg(0))
+	if err != nil {
+		printProfileError(err, stderr, *jsonOutput, stdout)
+		return 1
+	}
+	plan, err := planner.IsolatedAppTunnel(config, isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args())))
+	if err != nil {
+		fmt.Fprintf(stderr, "build isolated app plan: %v\n", err)
+		return 1
+	}
+	printPlan(plan, *jsonOutput, stdout)
+	return 0
+}
+
+func planIsolatedStop(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("plan-isolated-stop", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	options := isolatedStopFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button plan-isolated-stop [-json] -session-id uuid [-runtime-root path]")
+		return 2
+	}
+	plan, err := planner.IsolatedAppStop(planner.IsolatedAppStopOptions{
+		SessionID:   *options.sessionID,
+		RuntimeRoot: *options.runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build isolated stop plan: %v\n", err)
+		return 1
+	}
+	printPlan(plan, *jsonOutput, stdout)
+	return 0
+}
+
+func planIsolatedCleanup(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("plan-isolated-cleanup", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	options := isolatedStopFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button plan-isolated-cleanup [-json] -session-id uuid [-runtime-root path]")
+		return 2
+	}
+	plan, err := planner.IsolatedAppCleanup(planner.IsolatedAppStopOptions{
+		SessionID:   *options.sessionID,
+		RuntimeRoot: *options.runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build isolated cleanup plan: %v\n", err)
+		return 1
+	}
+	printPlan(plan, *jsonOutput, stdout)
+	return 0
+}
+
 func printStatus(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -165,19 +261,76 @@ func printStatus(args []string, stdout io.Writer, stderr io.Writer) int {
 		writeJSON(stdout, snapshot)
 		return 0
 	}
-	fmt.Fprintf(stdout, "state: %s\n", snapshot.State)
-	fmt.Fprintf(stdout, "runtime root: %s\n", snapshot.RuntimeRoot)
-	if snapshot.Active != nil {
-		fmt.Fprintf(stdout, "profile fingerprint: %s\n", snapshot.Active.ProfileFingerprint)
-		fmt.Fprintf(stdout, "wireguard interface: %s\n", snapshot.Active.WireGuardInterface)
-		if snapshot.Active.WSTunnelProcess != nil {
-			fmt.Fprintf(stdout, "wstunnel pid: %d\n", snapshot.Active.WSTunnelProcess.PID)
-		}
-	}
+	printStatusSnapshot(stdout, snapshot)
 	if snapshot.Error != "" {
-		fmt.Fprintf(stdout, "error: %s\n", snapshot.Error)
 		return 1
 	}
+	return 0
+}
+
+func printIsolatedStatus(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("isolated-status", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	options := isolatedStopFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button isolated-status [-json] -session-id uuid [-runtime-root path]")
+		return 2
+	}
+	plan, err := planner.IsolatedAppStop(planner.IsolatedAppStopOptions{
+		SessionID:   *options.sessionID,
+		RuntimeRoot: *options.runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build isolated status target: %v\n", err)
+		return 1
+	}
+	snapshot := status.FromStore(context.Background(), truntime.Store{
+		Root: filepath.Join(plan.RuntimeRoot, planner.DefaultIsolatedRuntimeSubdir, plan.SessionID),
+	})
+	if *jsonOutput {
+		writeJSON(stdout, snapshot)
+		return 0
+	}
+	printStatusSnapshot(stdout, snapshot)
+	if snapshot.Error != "" {
+		return 1
+	}
+	return 0
+}
+
+func printIsolatedSessions(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("isolated-sessions", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	runtimeRoot := fs.String("runtime-root", planner.DefaultRuntimeRoot, "launcher runtime state root")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button isolated-sessions [-json] [-runtime-root path]")
+		return 2
+	}
+	sessions, err := status.IsolatedSessions(context.Background(), *runtimeRoot)
+	if err != nil {
+		if *jsonOutput {
+			writeJSON(stdout, map[string]any{
+				"sessions": []status.IsolatedSessionSnapshot{},
+				"error":    err.Error(),
+			})
+		} else {
+			fmt.Fprintf(stderr, "list isolated sessions: %v\n", err)
+		}
+		return 1
+	}
+	if *jsonOutput {
+		writeJSON(stdout, map[string]any{"sessions": sessions})
+		return 0
+	}
+	printIsolatedSessionList(stdout, sessions, *runtimeRoot)
 	return 0
 }
 
@@ -217,6 +370,54 @@ func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		ReadOnlyDiscovery: *discoverRoutes,
 		PersistRuntime:    *persistRuntimeState,
 		RuntimeRoot:       plan.RuntimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build linux dry-run executor: %v\n", err)
+		return 1
+	}
+	result := engine.New(executor).Run(context.Background(), plan)
+	output := linuxDryRunOutput{
+		Plan:       plan,
+		Result:     result,
+		Operations: executor.Operations(),
+	}
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printPlan(plan, false, stdout)
+		printLinuxDryRun(output, stdout)
+	}
+	if result.State != engine.StateConnected {
+		return 1
+	}
+	return 0
+}
+
+func linuxDryRunIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-dry-run-isolated-app", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	options := isolatedAppFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() < 2 {
+		fmt.Fprintln(stderr, "usage: big-red-button linux-dry-run-isolated-app [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+		return 2
+	}
+
+	config, err := profile.LoadFile(fs.Arg(0))
+	if err != nil {
+		printProfileError(err, stderr, *jsonOutput, stdout)
+		return 1
+	}
+	plan, err := planner.IsolatedAppTunnel(config, isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args())))
+	if err != nil {
+		fmt.Fprintf(stderr, "build isolated app plan: %v\n", err)
+		return 1
+	}
+	executor, err := platformlinux.NewDryRunExecutorWithOptions(plan, platformlinux.DryRunOptions{
+		RuntimeRoot: plan.RuntimeRoot,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "build linux dry-run executor: %v\n", err)
@@ -363,6 +564,180 @@ func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
+func linuxIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-isolated-app", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	confirmed := fs.Bool("yes", false, "confirm this command may change Linux namespace, process and firewall state")
+	options := isolatedAppFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() < 2 {
+		fmt.Fprintln(stderr, "usage: big-red-button linux-isolated-app -yes [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+		return 2
+	}
+	if !*confirmed {
+		fmt.Fprintln(stderr, "linux-isolated-app requires -yes because it changes Linux namespace, process and firewall state")
+		return 2
+	}
+	if currentGOOS != "linux" {
+		fmt.Fprintf(stderr, "linux-isolated-app can only run on Linux; current OS is %s\n", currentGOOS)
+		return 1
+	}
+
+	config, err := profile.LoadFile(fs.Arg(0))
+	if err != nil {
+		printProfileError(err, stderr, *jsonOutput, stdout)
+		return 1
+	}
+	isolatedOptions := isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args()))
+	isolatedOptions = withDefaultLaunchIdentity(isolatedOptions)
+	isolatedOptions = withDefaultDesktopEnv(isolatedOptions)
+	plan, err := planner.IsolatedAppTunnel(config, isolatedOptions)
+	if err != nil {
+		fmt.Fprintf(stderr, "build isolated app plan: %v\n", err)
+		return 1
+	}
+	executor, err := platformlinux.NewIsolatedExecutor(platformlinux.IsolatedExecutorOptions{
+		Plan:        plan,
+		Profile:     config,
+		RuntimeRoot: plan.RuntimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build linux isolated executor: %v\n", err)
+		return 1
+	}
+	result := engine.New(executor).Run(context.Background(), plan)
+	output := linuxIsolatedOutput{
+		Plan:       plan,
+		Result:     result,
+		Operations: executor.Operations(),
+	}
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printPlan(plan, false, stdout)
+		printLinuxIsolated(output, stdout)
+	}
+	if result.State != engine.StateConnected {
+		return 1
+	}
+	return 0
+}
+
+func linuxStopIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-stop-isolated-app", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	confirmed := fs.Bool("yes", false, "confirm this command may stop processes and remove Linux namespace/firewall state")
+	options := isolatedStopFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button linux-stop-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
+		return 2
+	}
+	if !*confirmed {
+		fmt.Fprintln(stderr, "linux-stop-isolated-app requires -yes because it stops processes and removes Linux namespace/firewall state")
+		return 2
+	}
+	if currentGOOS != "linux" {
+		fmt.Fprintf(stderr, "linux-stop-isolated-app can only run on Linux; current OS is %s\n", currentGOOS)
+		return 1
+	}
+
+	plan, err := planner.IsolatedAppStop(planner.IsolatedAppStopOptions{
+		SessionID:   *options.sessionID,
+		RuntimeRoot: *options.runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build isolated stop plan: %v\n", err)
+		return 1
+	}
+	executor, err := platformlinux.NewIsolatedExecutor(platformlinux.IsolatedExecutorOptions{
+		Plan:        plan,
+		RuntimeRoot: plan.RuntimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build linux isolated executor: %v\n", err)
+		return 1
+	}
+	result := engine.New(executor).Run(context.Background(), plan)
+	output := linuxIsolatedOutput{
+		Plan:       plan,
+		Result:     result,
+		Operations: executor.Operations(),
+	}
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printPlan(plan, false, stdout)
+		printLinuxIsolated(output, stdout)
+	}
+	if result.State != engine.StateIdle {
+		return 1
+	}
+	return 0
+}
+
+func linuxCleanupIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-cleanup-isolated-app", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	confirmed := fs.Bool("yes", false, "confirm this command may remove launcher-owned Linux namespace/firewall/runtime state")
+	options := isolatedStopFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button linux-cleanup-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
+		return 2
+	}
+	if !*confirmed {
+		fmt.Fprintln(stderr, "linux-cleanup-isolated-app requires -yes because it removes launcher-owned Linux namespace/firewall/runtime state")
+		return 2
+	}
+	if currentGOOS != "linux" {
+		fmt.Fprintf(stderr, "linux-cleanup-isolated-app can only run on Linux; current OS is %s\n", currentGOOS)
+		return 1
+	}
+
+	plan, err := planner.IsolatedAppCleanup(planner.IsolatedAppStopOptions{
+		SessionID:   *options.sessionID,
+		RuntimeRoot: *options.runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build isolated cleanup plan: %v\n", err)
+		return 1
+	}
+	executor, err := platformlinux.NewIsolatedExecutor(platformlinux.IsolatedExecutorOptions{
+		Plan:        plan,
+		RuntimeRoot: plan.RuntimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build linux isolated cleanup executor: %v\n", err)
+		return 1
+	}
+	result := engine.New(executor).Run(context.Background(), plan)
+	output := linuxIsolatedOutput{
+		Plan:       plan,
+		Result:     result,
+		Operations: executor.Operations(),
+	}
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printPlan(plan, false, stdout)
+		printLinuxIsolated(output, stdout)
+	}
+	if result.State != engine.StateIdle {
+		return 1
+	}
+	return 0
+}
+
 func linuxDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs := flag.NewFlagSet("linux-disconnect", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -470,6 +845,29 @@ type connectFlagValues struct {
 	runtimeRoot        *string
 }
 
+type isolatedAppFlagValues struct {
+	sessionID          *string
+	appID              *string
+	dns                *string
+	wstunnelBinary     *string
+	wireguardInterface *string
+	runtimeRoot        *string
+	namespace          *string
+	hostVeth           *string
+	namespaceVeth      *string
+	hostAddress        *string
+	namespaceAddress   *string
+	hostGateway        *string
+	launchUID          *string
+	launchGID          *string
+	launchEnv          *stringListFlag
+}
+
+type isolatedStopFlagValues struct {
+	sessionID   *string
+	runtimeRoot *string
+}
+
 type linuxDryRunOutput struct {
 	Plan       planner.Plan              `json:"plan"`
 	Result     engine.Result             `json:"result"`
@@ -484,6 +882,26 @@ type linuxLifecycleOutput struct {
 	WireGuardOperations []platformlinux.Operation      `json:"wireguard_operations,omitempty"`
 }
 
+type linuxIsolatedOutput struct {
+	Plan       planner.Plan              `json:"plan"`
+	Result     engine.Result             `json:"result"`
+	Operations []platformlinux.Operation `json:"operations,omitempty"`
+}
+
+type stringListFlag []string
+
+func (f *stringListFlag) String() string {
+	if f == nil {
+		return ""
+	}
+	return strings.Join(*f, ",")
+}
+
+func (f *stringListFlag) Set(value string) error {
+	*f = append(*f, value)
+	return nil
+}
+
 func planConnectFlags(fs *flag.FlagSet) connectFlagValues {
 	return connectFlagValues{
 		endpointIPs:        fs.String("endpoint-ip", "", "comma-separated resolved WSTunnel endpoint IPs"),
@@ -493,6 +911,110 @@ func planConnectFlags(fs *flag.FlagSet) connectFlagValues {
 		wireguardInterface: fs.String("wireguard-interface", "", "WireGuard interface name"),
 		runtimeRoot:        fs.String("runtime-root", "", "launcher runtime state root"),
 	}
+}
+
+func isolatedAppFlags(fs *flag.FlagSet) isolatedAppFlagValues {
+	launchEnv := stringListFlag{}
+	fs.Var(&launchEnv, "app-env", "safe desktop environment KEY=value for the isolated app; repeatable")
+	return isolatedAppFlagValues{
+		sessionID:          fs.String("session-id", "", "isolated session UUID"),
+		appID:              fs.String("app-id", "", "app profile UUID; defaults to session-id"),
+		dns:                fs.String("dns", "", "comma-separated namespace DNS servers; defaults to profile DNS"),
+		wstunnelBinary:     fs.String("wstunnel-binary", "", "WSTunnel binary path/name"),
+		wireguardInterface: fs.String("wireguard-interface", "", "WireGuard interface name inside namespace"),
+		runtimeRoot:        fs.String("runtime-root", "", "launcher runtime state root"),
+		namespace:          fs.String("namespace", "", "Linux network namespace name"),
+		hostVeth:           fs.String("host-veth", "", "host-side veth name"),
+		namespaceVeth:      fs.String("namespace-veth", "", "namespace-side veth name"),
+		hostAddress:        fs.String("host-address", "", "host-side veth CIDR"),
+		namespaceAddress:   fs.String("namespace-address", "", "namespace-side veth CIDR"),
+		hostGateway:        fs.String("host-gateway", "", "host-side veth gateway address"),
+		launchUID:          fs.String("app-uid", "", "UID used to launch the selected app inside the namespace"),
+		launchGID:          fs.String("app-gid", "", "GID used to launch the selected app inside the namespace"),
+		launchEnv:          &launchEnv,
+	}
+}
+
+func isolatedStopFlags(fs *flag.FlagSet) isolatedStopFlagValues {
+	return isolatedStopFlagValues{
+		sessionID:   fs.String("session-id", "", "isolated session UUID"),
+		runtimeRoot: fs.String("runtime-root", "", "launcher runtime state root"),
+	}
+}
+
+func isolatedAppOptionsFromFlags(flags isolatedAppFlagValues, appCommand []string) planner.IsolatedAppOptions {
+	return planner.IsolatedAppOptions{
+		SessionID:          *flags.sessionID,
+		AppID:              *flags.appID,
+		AppCommand:         appCommand,
+		DNS:                csvOption(*flags.dns),
+		WSTunnelBinary:     *flags.wstunnelBinary,
+		WireGuardInterface: *flags.wireguardInterface,
+		RuntimeRoot:        *flags.runtimeRoot,
+		Namespace:          *flags.namespace,
+		HostVeth:           *flags.hostVeth,
+		NamespaceVeth:      *flags.namespaceVeth,
+		HostAddress:        *flags.hostAddress,
+		NamespaceAddress:   *flags.namespaceAddress,
+		HostGateway:        *flags.hostGateway,
+		LaunchUID:          *flags.launchUID,
+		LaunchGID:          *flags.launchGID,
+		LaunchEnv:          append([]string(nil), (*flags.launchEnv)...),
+	}
+}
+
+func withDefaultLaunchIdentity(options planner.IsolatedAppOptions) planner.IsolatedAppOptions {
+	if strings.TrimSpace(options.LaunchUID) != "" || strings.TrimSpace(options.LaunchGID) != "" {
+		return options
+	}
+	uid := strings.TrimSpace(os.Getenv("SUDO_UID"))
+	gid := strings.TrimSpace(os.Getenv("SUDO_GID"))
+	if uid == "" {
+		uid = strings.TrimSpace(os.Getenv("PKEXEC_UID"))
+	}
+	if uid != "" && gid == "" {
+		if user, err := userpkg.LookupId(uid); err == nil {
+			gid = user.Gid
+		}
+	}
+	if uid != "" && gid != "" {
+		options.LaunchUID = uid
+		options.LaunchGID = gid
+	}
+	return options
+}
+
+func withDefaultDesktopEnv(options planner.IsolatedAppOptions) planner.IsolatedAppOptions {
+	existing := map[string]struct{}{}
+	for _, value := range options.LaunchEnv {
+		key, _, ok := strings.Cut(value, "=")
+		if ok {
+			existing[key] = struct{}{}
+		}
+	}
+	for _, key := range desktopEnvKeys() {
+		if _, ok := existing[key]; ok {
+			continue
+		}
+		if value, ok := os.LookupEnv(key); ok && strings.TrimSpace(value) != "" {
+			options.LaunchEnv = append(options.LaunchEnv, key+"="+value)
+		}
+	}
+	return options
+}
+
+func desktopEnvKeys() []string {
+	return []string{"DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "PULSE_SERVER", "PIPEWIRE_RUNTIME_DIR"}
+}
+
+func isolatedAppCommandArgs(args []string) []string {
+	if len(args) < 2 {
+		return nil
+	}
+	if args[1] == "--" {
+		return args[2:]
+	}
+	return args[1:]
 }
 
 func printProfileError(err error, stderr io.Writer, jsonOutput bool, stdout io.Writer) {
@@ -528,6 +1050,15 @@ func printPlan(plan planner.Plan, jsonOutput bool, stdout io.Writer) {
 	}
 	if plan.WireGuardInterface != "" {
 		fmt.Fprintf(stdout, "wireguard interface: %s\n", plan.WireGuardInterface)
+	}
+	if plan.SessionID != "" {
+		fmt.Fprintf(stdout, "session: %s\n", plan.SessionID)
+	}
+	if plan.AppID != "" {
+		fmt.Fprintf(stdout, "app id: %s\n", plan.AppID)
+	}
+	if plan.Namespace != "" {
+		fmt.Fprintf(stdout, "namespace: %s\n", plan.Namespace)
 	}
 	if len(plan.EndpointIPs) > 0 {
 		fmt.Fprintf(stdout, "endpoint IPs: %v\n", plan.EndpointIPs)
@@ -593,6 +1124,99 @@ func printLinuxLifecycle(output linuxLifecycleOutput, stdout io.Writer) {
 	printLinuxOperations(stdout, "wireguard operations", output.WireGuardOperations)
 }
 
+func printLinuxIsolated(output linuxIsolatedOutput, stdout io.Writer) {
+	fmt.Fprintf(stdout, "engine state: %s\n", output.Result.State)
+	if output.Result.Error != "" {
+		fmt.Fprintf(stdout, "engine error: %s\n", output.Result.Error)
+	}
+	if output.Result.RollbackError != "" {
+		fmt.Fprintf(stdout, "rollback error: %s\n", output.Result.RollbackError)
+	}
+	printLinuxOperations(stdout, "isolated operations", output.Operations)
+}
+
+func printStatusSnapshot(stdout io.Writer, snapshot status.Snapshot) {
+	fmt.Fprintf(stdout, "state: %s\n", snapshot.State)
+	fmt.Fprintf(stdout, "runtime root: %s\n", snapshot.RuntimeRoot)
+	if snapshot.Active != nil {
+		if snapshot.Active.Mode != "" {
+			fmt.Fprintf(stdout, "mode: %s\n", snapshot.Active.Mode)
+		}
+		if snapshot.Active.SessionID != "" {
+			fmt.Fprintf(stdout, "session: %s\n", snapshot.Active.SessionID)
+		}
+		if snapshot.Active.Namespace != "" {
+			fmt.Fprintf(stdout, "namespace: %s\n", snapshot.Active.Namespace)
+		}
+		fmt.Fprintf(stdout, "profile fingerprint: %s\n", snapshot.Active.ProfileFingerprint)
+		fmt.Fprintf(stdout, "wireguard interface: %s\n", snapshot.Active.WireGuardInterface)
+		if snapshot.Active.AppProcess != nil {
+			fmt.Fprintf(stdout, "app pid: %d\n", snapshot.Active.AppProcess.PID)
+		}
+		if snapshot.Active.WSTunnelProcess != nil {
+			fmt.Fprintf(stdout, "wstunnel pid: %d\n", snapshot.Active.WSTunnelProcess.PID)
+		}
+	}
+	if snapshot.Error != "" {
+		fmt.Fprintf(stdout, "error: %s\n", snapshot.Error)
+	}
+}
+
+func printIsolatedSessionList(stdout io.Writer, sessions []status.IsolatedSessionSnapshot, runtimeRoot string) {
+	if len(sessions) == 0 {
+		fmt.Fprintln(stdout, "isolated sessions: []")
+		return
+	}
+	runtimeRootArg := isolatedRuntimeRootArg(runtimeRoot)
+	fmt.Fprintln(stdout, "isolated sessions:")
+	for _, session := range sessions {
+		fmt.Fprintf(stdout, "- session: %s\n", session.SessionID)
+		fmt.Fprintf(stdout, "  state: %s\n", session.Snapshot.State)
+		fmt.Fprintf(stdout, "  runtime root: %s\n", session.Snapshot.RuntimeRoot)
+		if session.Snapshot.Active != nil {
+			state := session.Snapshot.Active
+			if state.Namespace != "" {
+				fmt.Fprintf(stdout, "  namespace: %s\n", state.Namespace)
+			}
+			if state.WireGuardInterface != "" {
+				fmt.Fprintf(stdout, "  wireguard interface: %s\n", state.WireGuardInterface)
+			}
+			if state.AppProcess != nil {
+				fmt.Fprintf(stdout, "  app pid: %d\n", state.AppProcess.PID)
+			}
+			if state.WSTunnelProcess != nil {
+				fmt.Fprintf(stdout, "  wstunnel pid: %d\n", state.WSTunnelProcess.PID)
+			}
+		}
+		if session.Snapshot.Error != "" {
+			fmt.Fprintf(stdout, "  error: %s\n", session.Snapshot.Error)
+		}
+		fmt.Fprintf(stdout, "  stop: big-red-button linux-stop-isolated-app -yes -session-id %s%s\n", session.SessionID, runtimeRootArg)
+		fmt.Fprintf(stdout, "  cleanup: big-red-button linux-cleanup-isolated-app -yes -session-id %s%s\n", session.SessionID, runtimeRootArg)
+	}
+}
+
+func isolatedRuntimeRootArg(runtimeRoot string) string {
+	runtimeRoot = strings.TrimSpace(runtimeRoot)
+	if runtimeRoot == "" || runtimeRoot == planner.DefaultRuntimeRoot {
+		return ""
+	}
+	return " -runtime-root " + shellQuote(runtimeRoot)
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || strings.ContainsRune("/._+-=:", r) {
+			continue
+		}
+		return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+	}
+	return value
+}
+
 func printLinuxOperations(stdout io.Writer, title string, operations []platformlinux.Operation) {
 	if len(operations) == 0 {
 		return
@@ -639,10 +1263,19 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "commands:")
 	fmt.Fprintln(w, "  validate-profile [-json] <profile.json>")
 	fmt.Fprintln(w, "  plan-connect [-json] [-endpoint-ip ip[,ip]] <profile.json>")
+	fmt.Fprintln(w, "  plan-isolated-app [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+	fmt.Fprintln(w, "  plan-isolated-stop [-json] -session-id uuid [-runtime-root path]")
+	fmt.Fprintln(w, "  plan-isolated-cleanup [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  plan-disconnect [-json]")
 	fmt.Fprintln(w, "  status [-json] [-runtime-root path]")
+	fmt.Fprintln(w, "  isolated-status [-json] -session-id uuid [-runtime-root path]")
+	fmt.Fprintln(w, "  isolated-sessions [-json] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
+	fmt.Fprintln(w, "  linux-dry-run-isolated-app [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")
+	fmt.Fprintln(w, "  linux-isolated-app -yes [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+	fmt.Fprintln(w, "  linux-stop-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
+	fmt.Fprintln(w, "  linux-cleanup-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-disconnect -yes [-json] [-runtime-root path] <profile.json>")
 }

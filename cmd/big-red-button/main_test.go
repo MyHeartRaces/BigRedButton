@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,6 +122,85 @@ func TestPlanDisconnectCommand(t *testing.T) {
 	}
 }
 
+func TestPlanIsolatedAppCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"plan-isolated-app",
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+		"-app-env", "DISPLAY=:1",
+		"../../testdata/profiles/valid-wgws.json",
+		"--",
+		"/usr/bin/curl",
+		"https://example.com",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"isolated-app-tunnel plan",
+		"session: 123e4567-e89b-12d3-a456-426614174000",
+		"namespace: brb-123e4567",
+		"Start WSTunnel control process in host namespace",
+		"app_env=DISPLAY=:1",
+		"Launch selected app inside isolated namespace",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=") {
+		t.Fatalf("plan output leaked private key: %s", out)
+	}
+}
+
+func TestPlanIsolatedStopCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"plan-isolated-stop",
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"isolated-app-stop plan",
+		"session: 123e4567-e89b-12d3-a456-426614174000",
+		"Stop isolated app process tree",
+		"Delete isolated network namespace",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
+func TestPlanIsolatedCleanupCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"plan-isolated-cleanup",
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"isolated-app-cleanup plan",
+		"session: 123e4567-e89b-12d3-a456-426614174000",
+		"Best-effort stop remaining isolated namespace processes",
+		"Best-effort delete isolated namespace and host veth",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
 func TestStatusCommandIdle(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -153,6 +233,103 @@ func TestStatusCommandConnected(t *testing.T) {
 	out := stdout.String()
 	if !strings.Contains(out, "state: Connected") || !strings.Contains(out, "profile fingerprint: abc123") {
 		t.Fatalf("expected connected status, got: %s", out)
+	}
+}
+
+func TestIsolatedStatusCommandConnected(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	sessionID := "123e4567-e89b-12d3-a456-426614174000"
+	pid := os.Getpid()
+	store := truntime.Store{Root: filepath.Join(runtimeRoot, "isolated", sessionID)}
+	err := store.Save(context.Background(), truntime.State{
+		Version:            truntime.StateVersion,
+		Mode:               "isolated-app-tunnel",
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "brbwg123e4567",
+		SessionID:          sessionID,
+		Namespace:          "brb-123e4567",
+		HostVeth:           "brbh123e4567",
+		NamespaceVeth:      "brbn123e4567",
+	}.WithAppProcess(pid, []string{"ip", "netns", "exec"}).WithWSTunnelProcess(pid, []string{"wstunnel", "client"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{"isolated-status", "-runtime-root", runtimeRoot, "-session-id", sessionID}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"state: Connected",
+		"mode: isolated-app-tunnel",
+		"session: " + sessionID,
+		"namespace: brb-123e4567",
+		fmt.Sprintf("app pid: %d", pid),
+		fmt.Sprintf("wstunnel pid: %d", pid),
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
+func TestIsolatedSessionsCommand(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	sessionID := "123e4567-e89b-12d3-a456-426614174000"
+	pid := os.Getpid()
+	store := truntime.Store{Root: filepath.Join(runtimeRoot, "isolated", sessionID)}
+	err := store.Save(context.Background(), truntime.State{
+		Version:            truntime.StateVersion,
+		Mode:               "isolated-app-tunnel",
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "brbwg123e4567",
+		SessionID:          sessionID,
+		Namespace:          "brb-123e4567",
+		HostVeth:           "brbh123e4567",
+		NamespaceVeth:      "brbn123e4567",
+	}.WithAppProcess(pid, []string{"ip", "netns", "exec"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirtySessionID := "223e4567-e89b-12d3-a456-426614174000"
+	dirtyRoot := filepath.Join(runtimeRoot, "isolated", dirtySessionID)
+	if err := os.MkdirAll(dirtyRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dirtyRoot, "state.json"), []byte(`{"version":1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{"isolated-sessions", "-runtime-root", runtimeRoot}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"isolated sessions:",
+		"session: " + sessionID,
+		"state: Connected",
+		"namespace: brb-123e4567",
+		fmt.Sprintf("app pid: %d", pid),
+		"session: " + dirtySessionID,
+		"state: Dirty",
+		"cleanup: big-red-button linux-cleanup-isolated-app -yes -session-id " + dirtySessionID + " -runtime-root " + runtimeRoot,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	if got := shellQuote(`/tmp/Big Red Button/runtime`); got != `'/tmp/Big Red Button/runtime'` {
+		t.Fatalf("quote = %s", got)
+	}
+	if got := shellQuote(`/tmp/brb-runtime`); got != `/tmp/brb-runtime` {
+		t.Fatalf("quote = %s", got)
 	}
 }
 
@@ -251,6 +428,35 @@ func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
 	}
 }
 
+func TestLinuxDryRunIsolatedAppCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-dry-run-isolated-app",
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+		"../../testdata/profiles/valid-wgws.json",
+		"--",
+		"/usr/bin/curl",
+		"https://example.com",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"engine state: Connected",
+		"ip netns add brb-123e4567",
+		"ip link add brbh123e4567 type veth peer name brbn123e4567",
+		"wstunnel client --log-lvl INFO",
+		"ip netns exec brb-123e4567 ip link add dev brbwg123e4567 type wireguard",
+		"ip netns exec brb-123e4567 /usr/bin/curl https://example.com",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
 func TestLinuxConnectRequiresConfirmation(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -258,6 +464,54 @@ func TestLinuxConnectRequiresConfirmation(t *testing.T) {
 		"linux-connect",
 		"-endpoint-ip", "203.0.113.10",
 		"../../testdata/profiles/valid-wgws.json",
+	}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "requires -yes") {
+		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}
+
+func TestLinuxIsolatedAppRequiresConfirmation(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-isolated-app",
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+		"../../testdata/profiles/valid-wgws.json",
+		"--",
+		"/usr/bin/curl",
+	}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "requires -yes") {
+		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}
+
+func TestLinuxStopIsolatedAppRequiresConfirmation(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-stop-isolated-app",
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+	}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "requires -yes") {
+		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}
+
+func TestLinuxCleanupIsolatedAppRequiresConfirmation(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-cleanup-isolated-app",
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
 	}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
