@@ -503,7 +503,6 @@ func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
 	state.LastCommand = "isolated-recover"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
-	state = clearIsolatedSessionOnSuccess(state, response)
 	_ = a.saveState(state)
 	writeJSON(w, response)
 }

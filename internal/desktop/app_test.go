@@ -171,8 +171,11 @@ func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 	for _, want := range []string{
 		`id="isolated-cleanup"`,
 		`/api/isolated/cleanup`,
+		`id="isolated-preflight"`,
+		`/api/isolated/preflight`,
 		`id="isolated-recover"`,
 		`/api/isolated/recover`,
+		`Preflight`,
 		`Cleanup`,
 		`Recover Dirty`,
 		`known isolated sessions`,
