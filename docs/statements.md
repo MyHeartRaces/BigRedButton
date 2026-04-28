@@ -6,15 +6,16 @@ Project name: Big Red Button.
 
 ## Product
 
-Big Red Button is a desktop client for Tracegate V7, where V7 means
-WireGuard over WSTunnel:
+Big Red Button is a desktop VPN launcher. The first supported transport path is
+WireGuard over a websocket-capable tunnel helper:
 
 ```text
-client WireGuard -> local UDP endpoint -> WSTunnel WSS -> Transit WSTunnel -> server WireGuard
+client app -> local tunnel helper -> WireGuard path -> VPN server
 ```
 
-The client should make V7 usable for a normal desktop user through a minimal
-connect/disconnect workflow.
+The client should make the VPN path usable for a normal desktop user through a
+minimal connect/disconnect workflow first, then through isolated app tunnel
+sessions for selected applications.
 
 ## Platform Priority
 
@@ -72,9 +73,28 @@ replacement for the main VPN mode.
 Proxy mode may be added as a fallback or diagnostic mode after the VPN path is
 stable.
 
+## Isolated App Tunnel Target
+
+The preferred per-application mode is an isolated app tunnel session, not a
+proxy-only mode.
+
+The same product requirements apply to Linux, Windows and macOS:
+
+- selected app traffic and DNS use the tunnel
+- non-selected apps keep the ordinary host network path
+- host default route and host DNS remain unchanged
+- selected apps fail closed when the tunnel is down
+- crash recovery cleans up launcher-owned state
+- GUI remains unprivileged and talks to a privileged helper
+
+Linux may use network namespaces for the first implementation. Windows must use
+Windows-specific process-aware enforcement, likely through a service and
+Windows Filtering Platform. macOS must use Apple-specific networking APIs where
+required, likely through Network Extension or an equivalent signed helper
+model.
+
 ## Quality Gate
 
 Portability is not the main success metric. A port is acceptable only if it
 preserves the connect/disconnect semantics and does not leave broken routes,
 orphaned processes or stale privileged state.
-

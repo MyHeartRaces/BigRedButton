@@ -66,6 +66,34 @@ Scope:
 - route/DNS cleanup
 - signing and notarization plan
 
+## Phase 4: Isolated App Tunnel
+
+Goal: route selected applications through an isolated VPN session without
+changing host networking for the rest of the machine.
+
+The requirements are recorded in
+[`isolated-app-tunnel.md`](isolated-app-tunnel.md). They apply to Linux,
+Windows and macOS even if the first prototype is Linux-only.
+
+Scope:
+
+- session UUID and app rule model
+- helper-owned isolated session lifecycle
+- session-only DNS handling
+- session-only fail-closed behavior
+- cleanup and crash recovery
+- Linux network namespace backend prototype
+- Windows service/WFP feasibility spike
+- macOS Network Extension feasibility spike
+
+Exit criteria:
+
+- selected app traffic and DNS use the tunnel
+- non-selected apps continue using the host network
+- host default route and host DNS are unchanged
+- tunnel failure does not leak selected app traffic outside VPN
+- cleanup leaves no launcher-owned routes, interfaces, processes or rules
+
 ## Deferred
 
 - multi-profile manager
@@ -73,6 +101,6 @@ Scope:
 - account login
 - advanced logs UI
 - kill switch
-- split tunneling UI
+- split tunneling UI beyond isolated app tunnel
 - automatic updates
 - iOS and Android

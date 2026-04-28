@@ -6,6 +6,11 @@ Detailed implementation architecture is recorded in
 [`application-architecture.md`](application-architecture.md). This file keeps
 the short architectural summary.
 
+Isolated per-application tunnel requirements are recorded separately in
+[`isolated-app-tunnel.md`](isolated-app-tunnel.md). Those requirements are
+platform-neutral: Linux may be implemented first, but Windows and macOS must
+preserve the same safety and isolation semantics.
+
 ## Preferred Shape
 
 Big Red Button should be split into a small UI and a privileged networking
@@ -110,3 +115,5 @@ Likely implementation path:
 - Never persist raw profile material outside the agreed local storage boundary.
 - Keep the first client single-profile until connect/disconnect is reliable.
 - Treat proxy-only mode as a fallback, not the primary product path.
+- For isolated app tunnel mode, never change host default routes or host DNS;
+  all isolation and kill-switch behavior must be scoped to the app session.
