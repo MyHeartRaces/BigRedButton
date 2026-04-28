@@ -70,6 +70,19 @@ func TestSummaryDoesNotExposeSecrets(t *testing.T) {
 	}
 }
 
+func TestFingerprintIncludesDNS(t *testing.T) {
+	config, err := ParseV7([]byte(validProfileJSON()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := config
+	changed.DNS = "8.8.8.8"
+
+	if config.Fingerprint() == changed.Fingerprint() {
+		t.Fatal("expected DNS change to alter fingerprint")
+	}
+}
+
 func TestParseV7RejectsPlaceholders(t *testing.T) {
 	data, err := os.ReadFile("../../testdata/profiles/invalid-placeholder-wgws.json")
 	if err != nil {

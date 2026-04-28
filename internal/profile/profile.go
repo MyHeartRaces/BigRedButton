@@ -122,6 +122,7 @@ func (c Config) Fingerprint() string {
 		PresharedKey        string   `json:"wireguard_preshared_key"`
 		Addresses           []string `json:"addresses"`
 		AllowedIPs          []string `json:"allowed_ips"`
+		DNS                 string   `json:"dns,omitempty"`
 		MTU                 int      `json:"mtu"`
 		PersistentKeepalive int      `json:"persistent_keepalive"`
 	}{
@@ -133,6 +134,7 @@ func (c Config) Fingerprint() string {
 		PresharedKey:        c.PresharedKey,
 		Addresses:           c.Addresses,
 		AllowedIPs:          c.AllowedIPs,
+		DNS:                 strings.TrimSpace(c.DNS),
 		MTU:                 c.MTU,
 		PersistentKeepalive: c.PersistentKeepalive,
 	}
