@@ -186,6 +186,15 @@ big-red-button status
 
 By default, runtime state is stored in `/run/big-red-button/state.json`.
 
+Diagnostics:
+
+```bash
+big-red-button diagnostics -profile /path/to/profile.json
+```
+
+Diagnostics output includes redacted profile details, runtime state and known
+isolated sessions. It must not include WireGuard private keys or preshared keys.
+
 ## Linux Isolated App Tunnel
 
 This mode launches one selected process inside a Linux network namespace. It

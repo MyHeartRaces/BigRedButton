@@ -334,6 +334,36 @@ func TestShellQuote(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsCommand(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"diagnostics",
+		"-runtime-root", runtimeRoot,
+		"-profile", "../../testdata/profiles/valid-wgws.json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"generated at:",
+		"system runtime:",
+		"state: Idle",
+		"profile fingerprint:",
+		"profile gateway:",
+		"isolated sessions: []",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=") {
+		t.Fatalf("diagnostics leaked private key: %s", out)
+	}
+}
+
 func TestLinuxDryRunConnectCommand(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 

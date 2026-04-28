@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	stdruntime "runtime"
 	"strings"
+	"time"
 
 	"github.com/MyHeartRaces/BigRedButton/internal/engine"
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
@@ -52,6 +53,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return printIsolatedStatus(args[1:], stdout, stderr)
 	case "isolated-sessions":
 		return printIsolatedSessions(args[1:], stdout, stderr)
+	case "diagnostics":
+		return printDiagnostics(args[1:], stdout, stderr)
 	case "linux-dry-run-connect":
 		return linuxDryRunConnect(args[1:], stdout, stderr)
 	case "linux-dry-run-isolated-app":
@@ -334,6 +337,51 @@ func printIsolatedSessions(args []string, stdout io.Writer, stderr io.Writer) in
 	}
 	printIsolatedSessionList(stdout, sessions, *runtimeRoot)
 	return 0
+}
+
+func printDiagnostics(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("diagnostics", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	runtimeRoot := fs.String("runtime-root", planner.DefaultRuntimeRoot, "launcher runtime state root")
+	profilePath := fs.String("profile", "", "optional profile path to summarize")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button diagnostics [-json] [-runtime-root path] [-profile profile.json]")
+		return 2
+	}
+
+	output := diagnosticsOutput{
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		OS:          currentGOOS,
+		RuntimeRoot: *runtimeRoot,
+		Runtime:     status.FromStore(context.Background(), truntime.Store{Root: *runtimeRoot}),
+		ProfilePath: strings.TrimSpace(*profilePath),
+	}
+	sessions, err := status.IsolatedSessions(context.Background(), *runtimeRoot)
+	if err != nil {
+		output.Runtime.Error = appendError(output.Runtime.Error, "isolated sessions: "+err.Error())
+	} else {
+		output.IsolatedSessions = sessions
+	}
+	if output.ProfilePath != "" {
+		config, err := profile.LoadFile(output.ProfilePath)
+		if err != nil {
+			output.ProfileError = err.Error()
+		} else {
+			summary := config.Summary()
+			output.Profile = &summary
+		}
+	}
+
+	if *jsonOutput {
+		writeJSON(stdout, output)
+		return diagnosticsExitCode(output)
+	}
+	printDiagnosticsOutput(stdout, output)
+	return diagnosticsExitCode(output)
 }
 
 func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -955,6 +1003,17 @@ type linuxIsolatedRecoveryOutput struct {
 	Skipped     []string              `json:"skipped,omitempty"`
 }
 
+type diagnosticsOutput struct {
+	GeneratedAt      string                           `json:"generated_at"`
+	OS               string                           `json:"os"`
+	RuntimeRoot      string                           `json:"runtime_root"`
+	Runtime          status.Snapshot                  `json:"runtime"`
+	IsolatedSessions []status.IsolatedSessionSnapshot `json:"isolated_sessions,omitempty"`
+	ProfilePath      string                           `json:"profile_path,omitempty"`
+	Profile          *profile.Summary                 `json:"profile,omitempty"`
+	ProfileError     string                           `json:"profile_error,omitempty"`
+}
+
 type stringListFlag []string
 
 func (f *stringListFlag) String() string {
@@ -1223,6 +1282,41 @@ func printLinuxIsolatedRecovery(output linuxIsolatedRecoveryOutput, stdout io.Wr
 	}
 }
 
+func printDiagnosticsOutput(stdout io.Writer, output diagnosticsOutput) {
+	fmt.Fprintf(stdout, "generated at: %s\n", output.GeneratedAt)
+	fmt.Fprintf(stdout, "os: %s\n", output.OS)
+	fmt.Fprintf(stdout, "runtime root: %s\n", output.RuntimeRoot)
+	fmt.Fprintln(stdout, "system runtime:")
+	printStatusSnapshot(stdout, output.Runtime)
+	if output.ProfilePath != "" {
+		fmt.Fprintf(stdout, "profile path: %s\n", output.ProfilePath)
+		if output.Profile != nil {
+			fmt.Fprintf(stdout, "profile fingerprint: %s\n", output.Profile.Fingerprint)
+			fmt.Fprintf(stdout, "profile server: %s:%d\n", output.Profile.Server, output.Profile.Port)
+			fmt.Fprintf(stdout, "profile gateway: %s\n", output.Profile.WSTunnelURL)
+			fmt.Fprintf(stdout, "profile addresses: %v\n", output.Profile.Addresses)
+			fmt.Fprintf(stdout, "profile allowed IPs: %v\n", output.Profile.AllowedIPs)
+			fmt.Fprintf(stdout, "profile DNS configured: %t\n", output.Profile.DNSConfigured)
+		}
+		if output.ProfileError != "" {
+			fmt.Fprintf(stdout, "profile error: %s\n", output.ProfileError)
+		}
+	}
+	printIsolatedSessionList(stdout, output.IsolatedSessions, output.RuntimeRoot)
+}
+
+func diagnosticsExitCode(output diagnosticsOutput) int {
+	if output.Runtime.Error != "" || output.ProfileError != "" {
+		return 1
+	}
+	for _, session := range output.IsolatedSessions {
+		if session.Snapshot.Error != "" {
+			return 1
+		}
+	}
+	return 0
+}
+
 func printStatusSnapshot(stdout io.Writer, snapshot status.Snapshot) {
 	fmt.Fprintf(stdout, "state: %s\n", snapshot.State)
 	fmt.Fprintf(stdout, "runtime root: %s\n", snapshot.RuntimeRoot)
@@ -1303,6 +1397,16 @@ func shellQuote(value string) string {
 		return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 	}
 	return value
+}
+
+func appendError(existing string, next string) string {
+	if existing == "" {
+		return next
+	}
+	if next == "" {
+		return existing
+	}
+	return existing + "; " + next
 }
 
 func isolatedRecoveryTargets(sessions []status.IsolatedSessionSnapshot, includeAll bool) ([]string, []string) {
@@ -1390,6 +1494,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  status [-json] [-runtime-root path]")
 	fmt.Fprintln(w, "  isolated-status [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  isolated-sessions [-json] [-runtime-root path]")
+	fmt.Fprintln(w, "  diagnostics [-json] [-runtime-root path] [-profile profile.json]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  linux-dry-run-isolated-app [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
