@@ -59,6 +59,12 @@ func TestSummaryDoesNotExposeSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(encoded)
+	if !strings.Contains(text, `"profile":"WGWS"`) {
+		t.Fatalf("summary should use neutral profile type: %s", text)
+	}
+	if strings.Contains(text, legacyWGWSProfileName) {
+		t.Fatalf("summary leaked legacy profile name: %s", text)
+	}
 	for _, secret := range []string{
 		config.WireGuardPrivateKey,
 		config.PresharedKey,

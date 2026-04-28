@@ -1,9 +1,12 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -399,6 +402,44 @@ func TestDiagnosticsCommand(t *testing.T) {
 	}
 	if strings.Contains(out, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=") {
 		t.Fatalf("diagnostics leaked private key: %s", out)
+	}
+}
+
+func TestDiagnosticsBundleCommand(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	outputPath := filepath.Join(t.TempDir(), "diagnostics.tar.gz")
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"diagnostics-bundle",
+		"-runtime-root", runtimeRoot,
+		"-profile", "../../testdata/profiles/valid-wgws.json",
+		"-output", outputPath,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "diagnostics bundle: "+outputPath) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+
+	entries := readTarGzEntries(t, outputPath)
+	for _, name := range []string{"README.txt", "diagnostics.txt", "diagnostics.json", "manifest.json"} {
+		if entries[name] == "" {
+			t.Fatalf("missing diagnostics bundle entry %s; entries=%#v", name, entries)
+		}
+	}
+	if !strings.Contains(entries["diagnostics.txt"], "profile fingerprint:") {
+		t.Fatalf("diagnostics text missing profile summary: %s", entries["diagnostics.txt"])
+	}
+	if !strings.Contains(entries["diagnostics.json"], `"version"`) {
+		t.Fatalf("diagnostics json missing version: %s", entries["diagnostics.json"])
+	}
+	if strings.Contains(strings.Join(mapValues(entries), "\n"), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=") {
+		t.Fatalf("diagnostics bundle leaked private key: %#v", entries)
+	}
+	if strings.Contains(entries["diagnostics.json"], "V7-WireGuard") {
+		t.Fatalf("diagnostics bundle leaked legacy profile label: %s", entries["diagnostics.json"])
 	}
 }
 
@@ -1038,6 +1079,45 @@ func stubCurrentEUID(value int) func() {
 	return func() {
 		currentEUID = previous
 	}
+}
+
+func readTarGzEntries(t *testing.T, path string) map[string]string {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	gzipReader, err := gzip.NewReader(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gzipReader.Close()
+	tarReader := tar.NewReader(gzipReader)
+	entries := map[string]string{}
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := io.ReadAll(tarReader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries[header.Name] = string(payload)
+	}
+	return entries
+}
+
+func mapValues(values map[string]string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, value)
+	}
+	return result
 }
 
 func valueAfterPrefix(value string, prefix string) string {

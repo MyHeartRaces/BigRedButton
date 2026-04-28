@@ -226,6 +226,17 @@ big-red-button diagnostics -profile /path/to/profile.json
 Diagnostics output includes redacted profile details, runtime state and known
 isolated sessions. It must not include WireGuard private keys or preshared keys.
 
+Diagnostics bundle for remote troubleshooting:
+
+```bash
+big-red-button diagnostics-bundle \
+  -profile /path/to/profile.json \
+  -output big-red-button-diagnostics.tar.gz
+```
+
+The bundle contains redacted text and JSON diagnostics plus a small manifest.
+It is designed for issue reports and tester feedback.
+
 ## Linux Isolated App Tunnel
 
 This mode launches one selected process inside a Linux network namespace. It

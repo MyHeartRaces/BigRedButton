@@ -16,7 +16,10 @@ import (
 	"unicode"
 )
 
-const legacyWGWSProfileName = "V7-WireGuard-WSTunnel-Direct"
+const (
+	DisplayProfileType    = "WGWS"
+	legacyWGWSProfileName = "V7-WireGuard-WSTunnel-Direct"
+)
 
 type Config struct {
 	Protocol            string   `json:"protocol"`
@@ -95,7 +98,7 @@ func ParseWGWS(data []byte) (Config, error) {
 
 func (c Config) Summary() Summary {
 	return Summary{
-		Profile:             c.Name,
+		Profile:             DisplayProfileType,
 		Server:              c.Server,
 		Port:                c.Port,
 		WSTunnelHost:        c.WSTunnelHost,

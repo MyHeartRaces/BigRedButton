@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -67,6 +69,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return printIsolatedSessions(args[1:], stdout, stderr)
 	case "diagnostics":
 		return printDiagnostics(args[1:], stdout, stderr)
+	case "diagnostics-bundle":
+		return writeDiagnosticsBundleCommand(args[1:], stdout, stderr)
 	case "linux-dry-run-connect":
 		return linuxDryRunConnect(args[1:], stdout, stderr)
 	case "linux-preflight":
@@ -379,15 +383,57 @@ func printDiagnostics(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 
+	output := collectDiagnostics(*runtimeRoot, *profilePath)
+
+	if *jsonOutput {
+		writeJSON(stdout, output)
+		return diagnosticsExitCode(output)
+	}
+	printDiagnosticsOutput(stdout, output)
+	return diagnosticsExitCode(output)
+}
+
+func writeDiagnosticsBundleCommand(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("diagnostics-bundle", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	runtimeRoot := fs.String("runtime-root", planner.DefaultRuntimeRoot, "launcher runtime state root")
+	profilePath := fs.String("profile", "", "optional profile path to summarize")
+	outputPath := fs.String("output", "", "output .tar.gz path")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button diagnostics-bundle [-runtime-root path] [-profile profile.json] [-output path.tar.gz]")
+		return 2
+	}
+
+	output := collectDiagnostics(*runtimeRoot, *profilePath)
+	path := strings.TrimSpace(*outputPath)
+	if path == "" {
+		path = defaultDiagnosticsBundlePath(output.GeneratedAt)
+	}
+	if err := writeDiagnosticsBundle(path, output); err != nil {
+		fmt.Fprintf(stderr, "write diagnostics bundle: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "diagnostics bundle: %s\n", path)
+	return 0
+}
+
+func collectDiagnostics(runtimeRoot string, profilePath string) diagnosticsOutput {
+	runtimeRoot = strings.TrimSpace(runtimeRoot)
+	if runtimeRoot == "" {
+		runtimeRoot = planner.DefaultRuntimeRoot
+	}
 	output := diagnosticsOutput{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Version:     buildinfo.Current(),
 		OS:          currentGOOS,
-		RuntimeRoot: *runtimeRoot,
-		Runtime:     status.FromStore(context.Background(), truntime.Store{Root: *runtimeRoot}),
-		ProfilePath: strings.TrimSpace(*profilePath),
+		RuntimeRoot: runtimeRoot,
+		Runtime:     status.FromStore(context.Background(), truntime.Store{Root: runtimeRoot}),
+		ProfilePath: strings.TrimSpace(profilePath),
 	}
-	sessions, err := status.IsolatedSessions(context.Background(), *runtimeRoot)
+	sessions, err := status.IsolatedSessions(context.Background(), runtimeRoot)
 	if err != nil {
 		output.Runtime.Error = appendError(output.Runtime.Error, "isolated sessions: "+err.Error())
 	} else {
@@ -402,13 +448,7 @@ func printDiagnostics(args []string, stdout io.Writer, stderr io.Writer) int {
 			output.Profile = &summary
 		}
 	}
-
-	if *jsonOutput {
-		writeJSON(stdout, output)
-		return diagnosticsExitCode(output)
-	}
-	printDiagnosticsOutput(stdout, output)
-	return diagnosticsExitCode(output)
+	return output
 }
 
 func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -1802,6 +1842,129 @@ func printDiagnosticsOutput(stdout io.Writer, output diagnosticsOutput) {
 	printIsolatedSessionList(stdout, output.IsolatedSessions, output.RuntimeRoot)
 }
 
+func writeDiagnosticsBundle(path string, output diagnosticsOutput) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("diagnostics bundle path is required")
+	}
+	dir := filepath.Dir(path)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("create diagnostics bundle directory: %w", err)
+		}
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	closed := false
+	defer func() {
+		if !closed {
+			_ = file.Close()
+		}
+	}()
+
+	gzipWriter := gzip.NewWriter(file)
+	tarWriter := tar.NewWriter(gzipWriter)
+
+	diagnosticsJSON, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode diagnostics json: %w", err)
+	}
+	diagnosticsJSON = append(diagnosticsJSON, '\n')
+
+	var diagnosticsText strings.Builder
+	printDiagnosticsOutput(&diagnosticsText, output)
+
+	manifest := map[string]any{
+		"generated_at": output.GeneratedAt,
+		"version":      output.Version,
+		"os":           output.OS,
+		"runtime_root": output.RuntimeRoot,
+		"profile_path": output.ProfilePath,
+		"contents": []string{
+			"README.txt",
+			"diagnostics.txt",
+			"diagnostics.json",
+			"manifest.json",
+		},
+	}
+	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode diagnostics manifest: %w", err)
+	}
+	manifestJSON = append(manifestJSON, '\n')
+
+	readme := strings.Join([]string{
+		"Big Red Button diagnostics bundle",
+		"",
+		"This archive is intended for troubleshooting launcher state.",
+		"It contains redacted status, profile summary and runtime metadata.",
+		"It must not contain WireGuard private keys or preshared keys.",
+		"",
+	}, "\n")
+
+	for _, entry := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "README.txt", data: []byte(readme)},
+		{name: "diagnostics.txt", data: []byte(diagnosticsText.String())},
+		{name: "diagnostics.json", data: diagnosticsJSON},
+		{name: "manifest.json", data: manifestJSON},
+	} {
+		if err := writeTarEntry(tarWriter, entry.name, entry.data, output.GeneratedAt); err != nil {
+			_ = file.Close()
+			return err
+		}
+	}
+	if err := tarWriter.Close(); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("close diagnostics tar: %w", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("close diagnostics gzip: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close diagnostics bundle: %w", err)
+	}
+	closed = true
+	return nil
+}
+
+func writeTarEntry(writer *tar.Writer, name string, data []byte, generatedAt string) error {
+	modTime := time.Now().UTC()
+	if parsed, err := time.Parse(time.RFC3339, generatedAt); err == nil {
+		modTime = parsed
+	}
+	header := &tar.Header{
+		Name:    name,
+		Mode:    0o600,
+		Size:    int64(len(data)),
+		ModTime: modTime,
+	}
+	if err := writer.WriteHeader(header); err != nil {
+		return fmt.Errorf("write tar header %s: %w", name, err)
+	}
+	if _, err := writer.Write(data); err != nil {
+		return fmt.Errorf("write tar entry %s: %w", name, err)
+	}
+	return nil
+}
+
+func defaultDiagnosticsBundlePath(generatedAt string) string {
+	stamp := generatedAt
+	if parsed, err := time.Parse(time.RFC3339, generatedAt); err == nil {
+		stamp = parsed.UTC().Format("20060102-150405")
+	} else {
+		stamp = strings.NewReplacer(":", "", "-", "", "T", "-", "Z", "").Replace(generatedAt)
+	}
+	if stamp == "" {
+		stamp = time.Now().UTC().Format("20060102-150405")
+	}
+	return "big-red-button-diagnostics-" + stamp + ".tar.gz"
+}
+
 func diagnosticsExitCode(output diagnosticsOutput) int {
 	if output.Runtime.Error != "" || output.ProfileError != "" {
 		return 1
@@ -1997,6 +2160,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  isolated-status [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  isolated-sessions [-json] [-runtime-root path]")
 	fmt.Fprintln(w, "  diagnostics [-json] [-runtime-root path] [-profile profile.json]")
+	fmt.Fprintln(w, "  diagnostics-bundle [-runtime-root path] [-profile profile.json] [-output path.tar.gz]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  linux-preflight [-json] [-discover-routes] [-require-pkexec] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  linux-preflight-isolated-app [-json] [-require-pkexec] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
