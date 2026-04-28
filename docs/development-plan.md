@@ -27,7 +27,7 @@ cmd/
   big-red-button/       # CLI for development, diagnostics and tests
   big-red-buttond/         # privileged helper / daemon
 internal/
-  profile/                     # V7 profile parsing, validation, redaction
+  profile/                     # VPN profile parsing, validation, redaction
   engine/                      # connect/disconnect state machine
   supervisor/                  # child process lifecycle, especially wstunnel
   wireguard/                   # WireGuard adapter interfaces
@@ -40,7 +40,7 @@ internal/
     windows/                   # stubs until Windows phase
     darwin/                    # stubs until macOS phase
 testdata/
-  profiles/                    # redacted V7 fixtures
+  profiles/                    # redacted VPN fixtures
 frontend/                      # embedded desktop web UI, added after CLI lifecycle
 ```
 
@@ -51,14 +51,14 @@ The exact package names can change, but the separation must remain:
 - privileged network operations are platform adapters
 - UI never performs privileged operations directly
 
-## Step 1: V7 Profile Contract
+## Step 1: VPN Profile Contract
 
-Create a launcher-owned V7 profile schema based on Tracegate's
+Create a launcher-owned VPN profile schema based on server export
 `effective_config_json`.
 
 Minimum required fields:
 
-- profile name: `V7-WireGuard-WSTunnel-Direct`
+- profile name: `WGWS-Direct`
 - WSTunnel URL: `wss://host:443/path`
 - WSTunnel local UDP endpoint
 - WireGuard private key
@@ -154,7 +154,7 @@ Test layers:
 - unit tests for route planning
 - fake platform tests for rollback order
 - optional privileged Linux integration tests
-- manual smoke script for a real V7 profile
+- manual smoke script for a real VPN profile
 
 The privileged integration tests should be opt-in and clearly marked so they do
 not run accidentally on a developer machine.

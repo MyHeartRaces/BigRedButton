@@ -6,7 +6,7 @@ Status: accepted baseline
 
 ## Purpose
 
-Big Red Button is a desktop launcher for one Tracegate V7 profile:
+Big Red Button is a desktop launcher for one VPN profile:
 WireGuard over WSTunnel.
 
 The application does not implement WireGuard or WSTunnel. It owns the reliable
@@ -110,7 +110,7 @@ implementation path.
 Initial internal package boundaries:
 
 ```text
-internal/profile      parse, normalize, validate and redact V7 profiles
+internal/profile      parse, normalize, validate and redact VPN profiles
 internal/engine       connection state machine and rollback model
 internal/planner      connect/disconnect plans and dry-run rendering
 internal/supervisor   child process lifecycle, especially WSTunnel
@@ -127,12 +127,12 @@ platform-neutral. Linux/Windows/macOS behavior belongs below `platform`.
 
 ## Profile Boundary
 
-The launcher consumes a normalized V7 profile derived from Tracegate
+The launcher consumes a normalized VPN profile derived from server
 `effective_config_json`.
 
 Minimum profile fields:
 
-- profile name: `V7-WireGuard-WSTunnel-Direct`
+- profile name: `WGWS-Direct`
 - WSTunnel URL: `wss://host:443/path`
 - WSTunnel local UDP listen endpoint
 - WireGuard client private key
@@ -151,8 +151,8 @@ Validation rules:
 - require port `443` in the MVP
 - reject query, fragment and whitespace in WSTunnel URL
 - require local UDP listen to be loopback
-- require MTU within the conservative Tracegate range
-- require keepalive within the Tracegate range
+- require MTU within the supported range
+- require keepalive within the supported range
 - redact all keys in status, logs and diagnostic output
 
 The UI should read the profile file and send profile bytes to the helper. The
@@ -399,7 +399,7 @@ part of the default local test command.
 Implement in this order:
 
 1. Go module and package skeleton.
-2. V7 profile model, validation and redaction.
+2. VPN profile model, validation and redaction.
 3. `big-red-button validate-profile`.
 4. Planner and dry-run connect/disconnect output.
 5. Fake platform adapter tests for rollback.

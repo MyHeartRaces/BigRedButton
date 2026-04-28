@@ -81,9 +81,10 @@ runtime status, and on Linux run guarded connect/disconnect commands through
 the CLI.
 
 On Linux the GUI uses `pkexec` when available, so desktop environments can show
-a graphical privilege prompt. On macOS and Windows the GUI starts normally, but
-real connect/disconnect remains unavailable until those platform adapters are
-implemented.
+a graphical privilege prompt. The Linux package installs a polkit action for
+`/usr/bin/big-red-button` so the prompt uses the application name and icon.
+On macOS and Windows the GUI starts normally, but real connect/disconnect
+remains unavailable until those platform adapters are implemented.
 
 ## GitHub Releases
 
@@ -133,6 +134,7 @@ The package installs:
 - `/usr/bin/big-red-button-gui`
 - `/usr/share/applications/big-red-button.desktop`
 - `/usr/share/icons/hicolor/scalable/apps/big-red-button.svg`
+- `/usr/share/polkit-1/actions/com.myheartraces.bigredbutton.policy`
 - `/usr/share/licenses/big-red-button/LICENSE`
 - `/usr/share/doc/big-red-button/README.md`
 

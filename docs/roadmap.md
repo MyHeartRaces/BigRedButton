@@ -8,18 +8,18 @@ Date: 2026-04-25
 - record initial product statements
 - fix the first implementation stack
 - record the development plan and quality gates
-- define the V7 profile schema consumed by the launcher
+- define the VPN profile schema consumed by the launcher
 - scaffold the Go module and desktop GUI shell
 - add a headless `big-red-button` path before relying on the UI
 
 ## Phase 1: Linux MVP
 
-Goal: one-button local client that can connect and disconnect a single V7
+Goal: one-button local client that can connect and disconnect a single VPN
 profile system-wide on Linux.
 
 Scope:
 
-- load one local V7 profile
+- load one local VPN profile
 - validate WireGuard and WSTunnel fields
 - start `wstunnel client`
 - start WireGuard
