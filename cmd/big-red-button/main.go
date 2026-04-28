@@ -579,6 +579,9 @@ func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "build connect plan: %v\n", err)
 		return 1
 	}
+	if handled, code := handleExistingLinuxConnection(plan, *jsonOutput, stdout); handled {
+		return code
+	}
 	if len(plan.EndpointIPs) == 0 {
 		fmt.Fprintln(stderr, "linux-connect requires at least one -endpoint-ip for the WSTunnel server")
 		return 2
@@ -613,6 +616,51 @@ func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+func handleExistingLinuxConnection(plan planner.Plan, jsonOutput bool, stdout io.Writer) (bool, int) {
+	snapshot := status.FromStore(context.Background(), truntime.Store{Root: plan.RuntimeRoot})
+	if snapshot.State == status.StateIdle {
+		return false, 0
+	}
+
+	result := engine.Result{
+		PlanKind: plan.Kind,
+		State:    engine.StateConnected,
+	}
+	code := 0
+	switch {
+	case snapshot.State == status.StateDirty:
+		result.State = engine.StateFailedDirty
+		result.Error = "runtime state is dirty; run linux-disconnect or cleanup before connecting"
+		code = 1
+	case snapshot.Active == nil:
+		result.State = engine.StateFailedDirty
+		result.Error = "runtime state is active but missing details"
+		code = 1
+	case snapshot.Active.ProfileFingerprint != plan.ProfileFingerprint:
+		result.State = engine.StateFailedDirty
+		result.Error = "already connected with a different profile; disconnect before connecting"
+		code = 1
+	case snapshot.Active.WireGuardInterface != plan.WireGuardInterface:
+		result.State = engine.StateFailedDirty
+		result.Error = "already connected with a different WireGuard interface; disconnect before connecting"
+		code = 1
+	default:
+		result.AppliedStepIDs = []string{"already-connected"}
+	}
+
+	output := linuxLifecycleOutput{
+		Plan:   plan,
+		Result: result,
+	}
+	if jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printPlan(plan, false, stdout)
+		printLinuxLifecycle(output, stdout)
+	}
+	return true, code
 }
 
 func linuxIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -1247,6 +1295,11 @@ func printLinuxLifecycle(output linuxLifecycleOutput, stdout io.Writer) {
 	}
 	if output.Result.RollbackError != "" {
 		fmt.Fprintf(stdout, "rollback error: %s\n", output.Result.RollbackError)
+	}
+	for _, stepID := range output.Result.AppliedStepIDs {
+		if stepID == "already-connected" {
+			fmt.Fprintln(stdout, "engine note: already connected; no changes applied")
+		}
 	}
 	printLinuxOperations(stdout, "route operations", output.RouteOperations)
 	printLinuxOperations(stdout, "dns operations", output.DNSOperations)

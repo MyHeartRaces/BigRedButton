@@ -11,6 +11,7 @@ import (
 
 	"github.com/MyHeartRaces/BigRedButton/internal/engine"
 	platformlinux "github.com/MyHeartRaces/BigRedButton/internal/platform/linux"
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
 	"github.com/MyHeartRaces/BigRedButton/internal/status"
 )
@@ -526,6 +527,71 @@ func TestLinuxConnectRequiresConfirmation(t *testing.T) {
 	}
 }
 
+func TestLinuxConnectAlreadyConnectedSkipsMutation(t *testing.T) {
+	defer forceGOOS("linux")()
+	runtimeRoot := t.TempDir()
+	config, err := profile.LoadFile("../../testdata/profiles/valid-wgws.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (truntime.Store{Root: runtimeRoot}).Save(context.Background(), truntime.State{
+		Version:            truntime.StateVersion,
+		ProfileFingerprint: config.Fingerprint(),
+		WireGuardInterface: "tg-v7",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-connect",
+		"-yes",
+		"-runtime-root", runtimeRoot,
+		"../../testdata/profiles/valid-wgws.json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"engine state: Connected",
+		"engine note: already connected; no changes applied",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "route operations:") || strings.Contains(out, "wireguard operations:") {
+		t.Fatalf("expected no lifecycle operations, got: %s", out)
+	}
+}
+
+func TestLinuxConnectRejectsDifferentActiveProfile(t *testing.T) {
+	defer forceGOOS("linux")()
+	runtimeRoot := t.TempDir()
+	if err := (truntime.Store{Root: runtimeRoot}).Save(context.Background(), truntime.State{
+		Version:            truntime.StateVersion,
+		ProfileFingerprint: "other",
+		WireGuardInterface: "tg-v7",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-connect",
+		"-yes",
+		"-runtime-root", runtimeRoot,
+		"../../testdata/profiles/valid-wgws.json",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "already connected with a different profile") {
+		t.Fatalf("expected profile mismatch error, got: %s", stdout.String())
+	}
+}
+
 func TestLinuxIsolatedAppRequiresConfirmation(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -613,5 +679,13 @@ func TestLinuxDisconnectRequiresConfirmation(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "requires -yes") {
 		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}
+
+func forceGOOS(value string) func() {
+	previous := currentGOOS
+	currentGOOS = value
+	return func() {
+		currentGOOS = previous
 	}
 }
