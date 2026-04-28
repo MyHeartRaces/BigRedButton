@@ -41,6 +41,7 @@ type Plan struct {
 	HostAddress        string                     `json:"host_address,omitempty"`
 	NamespaceAddress   string                     `json:"namespace_address,omitempty"`
 	HostGateway        string                     `json:"host_gateway,omitempty"`
+	DNSServers         []string                   `json:"dns_servers,omitempty"`
 	Warnings           []string                   `json:"warnings,omitempty"`
 	Steps              []Step                     `json:"steps"`
 	RouteExclusions    []routes.EndpointExclusion `json:"route_exclusions,omitempty"`
@@ -178,24 +179,28 @@ func Connect(config profile.Config, options Options) (Plan, error) {
 		},
 	)
 
-	if strings.TrimSpace(config.DNS) == "" {
+	dnsServers, err := normalizeDNSServers(config.DNS)
+	if err != nil {
+		return Plan{}, err
+	}
+	if len(dnsServers) == 0 {
 		steps = append(steps, Step{
-			ID:                 "dns-plan",
+			ID:                 "skip-dns",
 			Action:             "Skip DNS changes",
 			Details:            []string{"profile has no DNS value"},
 			SecretMaterialFree: true,
 		})
 	} else {
+		details := []string{"interface=" + normalized.WireGuardInterface, "routing_domain=~.", "default_route=yes"}
+		details = append(details, prefixed("dns=", dnsServers)...)
 		steps = append(steps, Step{
-			ID:                 "dns-plan",
-			Action:             "Plan platform DNS update",
-			Details:            []string{"dns_configured=true", "adapter selected at apply time"},
+			ID:                 "apply-dns",
+			Action:             "Apply launcher-owned DNS settings on WireGuard interface",
+			Details:            details,
 			RequiresPrivilege:  true,
-			Rollback:           []string{"restore previous DNS state if changed by launcher"},
-			DependsOnRuntime:   true,
+			Rollback:           []string{"revert launcher-owned DNS settings on " + normalized.WireGuardInterface},
 			SecretMaterialFree: true,
 		})
-		warnings = append(warnings, "DNS adapter is not implemented in the first Linux MVP; dry-run records intent only")
 	}
 
 	steps = append(steps,
@@ -223,6 +228,7 @@ func Connect(config profile.Config, options Options) (Plan, error) {
 		EndpointIPs:        normalized.EndpointIPs,
 		WireGuardInterface: normalized.WireGuardInterface,
 		RuntimeRoot:        normalized.RuntimeRoot,
+		DNSServers:         dnsServers,
 		Warnings:           warnings,
 		Steps:              steps,
 		RouteExclusions:    routeExclusions,
@@ -331,6 +337,31 @@ func normalizeOptions(options Options) (Options, []string, error) {
 		normalized.RuntimeRoot = DefaultRuntimeRoot
 	}
 	return normalized, warnings, nil
+}
+
+func normalizeDNSServers(raw string) ([]string, error) {
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n' || r == '\r'
+	})
+	servers := make([]string, 0, len(parts))
+	seen := map[string]struct{}{}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		addr, err := netip.ParseAddr(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid DNS server %q: %w", part, err)
+		}
+		normalized := addr.String()
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		servers = append(servers, normalized)
+	}
+	return servers, nil
 }
 
 func prefixed(prefix string, values []string) []string {

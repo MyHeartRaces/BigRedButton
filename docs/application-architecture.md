@@ -328,23 +328,31 @@ error before production use.
 
 ## DNS Architecture
 
-DNS is intentionally minimal in the first Linux MVP.
+DNS handling is explicit and platform-owned.
 
 Rules:
 
 - parse DNS values from the profile
-- include DNS in dry-run plans
+- include DNS commands in dry-run output
+- record applied launcher-owned DNS state in runtime state
+- restore only launcher-owned DNS state during disconnect and rollback
 - do not silently rewrite system DNS through an unknown mechanism
-- implement platform DNS adapters separately
+- keep isolated app DNS scoped to the isolated session, not host DNS
 
-Linux DNS candidates:
+Linux system-wide mode uses the `systemd-resolved` link API through
+`resolvectl`:
 
-- systemd-resolved adapter
-- resolvconf adapter
-- NetworkManager adapter
+- `resolvectl dns <wireguard-iface> <server...>`
+- `resolvectl domain <wireguard-iface> ~.`
+- `resolvectl default-route <wireguard-iface> yes`
+- `resolvectl revert <wireguard-iface>` during disconnect and rollback
 
-Until a DNS adapter is implemented, the status must clearly expose that DNS was
-not changed. This is a known MVP limitation, not hidden behavior.
+Linux isolated app mode does not use host DNS. It writes namespace-local DNS
+state under `/etc/netns/<namespace>/resolv.conf`.
+
+Windows and macOS must implement their own DNS adapters. They should preserve
+the same invariants: explicit apply, recorded launcher ownership, deterministic
+restore, and no global DNS mutation for isolated app mode.
 
 ## Security Boundaries
 

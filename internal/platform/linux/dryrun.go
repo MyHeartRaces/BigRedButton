@@ -118,6 +118,15 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 			return err
 		}
 		e.record(OperationApply, step.ID, command)
+	case step.ID == "apply-dns":
+		dnsExecutor := DNSExecutor{plan: e.plan}
+		commands, err := dnsExecutor.applyCommands()
+		if err != nil {
+			return err
+		}
+		for _, command := range commands {
+			e.record(OperationApply, step.ID, command)
+		}
 	case step.ID == "store-runtime-state":
 		state, err := e.stateFromPlan()
 		if err != nil {
@@ -140,6 +149,24 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 		e.runtimeState = state
 		e.routeExclusionsByEndpoint = routeExclusionMap(state.RouteExclusions)
 		e.recordRuntime(OperationApply, step.ID, "load "+e.storePath())
+	case step.ID == "restore-dns":
+		state, err := e.stateForDisconnect(ctx)
+		if err != nil {
+			return err
+		}
+		if !state.DNSApplied {
+			e.recordRuntime(OperationApply, step.ID, "no launcher-owned DNS state")
+			break
+		}
+		iface := strings.TrimSpace(state.DNSInterface)
+		if iface == "" {
+			iface = state.WireGuardInterface
+		}
+		command, err := ResolveCtlRevertCommand(iface)
+		if err != nil {
+			return err
+		}
+		e.record(OperationApply, step.ID, command)
 	case step.ID == "remove-endpoint-route-exclusions":
 		state, err := e.stateForDisconnect(ctx)
 		if err != nil {
@@ -328,6 +355,17 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 func (e *DryRunExecutor) Rollback(_ context.Context, step planner.Step) error {
 	if e == nil {
 		return fmt.Errorf("linux dry-run executor is nil")
+	}
+	if step.ID == "apply-dns" {
+		if len(e.plan.DNSServers) == 0 {
+			return nil
+		}
+		command, err := ResolveCtlRevertCommand(e.plan.WireGuardInterface)
+		if err != nil {
+			return err
+		}
+		e.record(OperationRollback, step.ID, command)
+		return nil
 	}
 	if !strings.HasPrefix(step.ID, "add-route-exclusion-") && !strings.Contains(step.ID, "netns") && !strings.Contains(step.ID, "veth") && !strings.Contains(step.ID, "wireguard") && !strings.Contains(step.ID, "wstunnel") && !strings.Contains(step.ID, "kill-switch") && !strings.Contains(step.ID, "dns") && step.ID != "create-isolated-runtime-root" && step.ID != "launch-app-in-netns" && step.ID != "store-isolated-runtime-state" {
 		return nil

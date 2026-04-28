@@ -26,6 +26,7 @@ Implemented:
 - Linux route exclusions for the tunnel gateway
 - tunnel helper command builder and process executor
 - WireGuard `wg setconf` renderer and Linux executor
+- Linux system DNS adapter through `systemd-resolved` / `resolvectl`
 - composite Linux lifecycle executor with rollback tests
 - guarded Linux connect/disconnect CLI commands
 - Linux isolated app tunnel planner, dry-run, guarded apply, stop and cleanup
@@ -37,7 +38,6 @@ Implemented:
 Not implemented yet:
 
 - privileged daemon / IPC boundary
-- DNS adapter
 - automatic isolated session crash recovery
 - Windows, macOS, or mobile ports
 
@@ -52,6 +52,7 @@ Runtime on Linux:
 
 - `iproute2`
 - `wireguard-tools`
+- `systemd-resolved` / `resolvectl` when the profile contains DNS servers
 - `nftables` for isolated app tunnel fail-closed rules
 - `setpriv` from util-linux for launching isolated apps as the desktop user
 - `wstunnel` in `PATH`, or pass `-wstunnel-binary /path/to/wstunnel`
@@ -185,6 +186,10 @@ big-red-button status
 ```
 
 By default, runtime state is stored in `/run/big-red-button/state.json`.
+If the profile contains DNS servers, system-wide Linux connect applies them to
+the launcher WireGuard link with `resolvectl dns`, `resolvectl domain <iface> ~.`
+and `resolvectl default-route <iface> yes`; disconnect reverts the link with
+`resolvectl revert` before removing the interface.
 
 Diagnostics:
 

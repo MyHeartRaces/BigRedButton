@@ -383,6 +383,9 @@ func TestLinuxDryRunConnectCommand(t *testing.T) {
 		"linux dry-run commands:",
 		"ip -4 route get 203.0.113.10",
 		"ip -4 route replace 203.0.113.10/32 via 192.0.2.1 dev eth0",
+		"resolvectl dns tg-v7 1.1.1.1",
+		"resolvectl domain tg-v7 ~.",
+		"resolvectl default-route tg-v7 yes",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output: %s", want, out)
@@ -447,6 +450,7 @@ func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
 	for _, want := range []string{
 		"engine state: Idle",
 		"load " + statePath,
+		"resolvectl revert tg-v7",
 		"ip -4 route delete 203.0.113.10/32 via 192.0.2.1 dev eth0",
 		"clear " + statePath,
 	} {

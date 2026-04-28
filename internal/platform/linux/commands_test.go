@@ -108,3 +108,53 @@ func TestEndpointExclusionCommandRejectsNonHostPrefix(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestResolveCtlDNSCommands(t *testing.T) {
+	cases := []struct {
+		name string
+		fn   func() (Command, error)
+		want []string
+	}{
+		{
+			name: "dns",
+			fn: func() (Command, error) {
+				return ResolveCtlDNSCommand("tg-v7", []string{"1.1.1.1", "2606:4700:4700::1111"})
+			},
+			want: []string{"resolvectl", "dns", "tg-v7", "1.1.1.1", "2606:4700:4700::1111"},
+		},
+		{
+			name: "domain",
+			fn:   func() (Command, error) { return ResolveCtlDomainCommand("tg-v7", []string{"~."}) },
+			want: []string{"resolvectl", "domain", "tg-v7", "~."},
+		},
+		{
+			name: "default-route",
+			fn:   func() (Command, error) { return ResolveCtlDefaultRouteCommand("tg-v7", true) },
+			want: []string{"resolvectl", "default-route", "tg-v7", "yes"},
+		},
+		{
+			name: "revert",
+			fn:   func() (Command, error) { return ResolveCtlRevertCommand("tg-v7") },
+			want: []string{"resolvectl", "revert", "tg-v7"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			command, err := tc.fn()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(command.Argv(), tc.want) {
+				t.Fatalf("argv = %#v want %#v", command.Argv(), tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveCtlDNSCommandRejectsInvalidServer(t *testing.T) {
+	_, err := ResolveCtlDNSCommand("tg-v7", []string{"not-an-ip"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}

@@ -46,6 +46,22 @@ func TestConnectPlanWithEndpointIPs(t *testing.T) {
 	if !hasStep(plan, "apply-wireguard-peer") {
 		t.Fatalf("missing wireguard peer step: %#v", plan.Steps)
 	}
+	if !hasStep(plan, "apply-dns") {
+		t.Fatalf("missing DNS apply step: %#v", plan.Steps)
+	}
+	if len(plan.DNSServers) != 1 || plan.DNSServers[0] != "1.1.1.1" {
+		t.Fatalf("unexpected DNS servers: %#v", plan.DNSServers)
+	}
+	dnsStep := findStep(plan, "apply-dns")
+	dnsDetails := strings.Join(dnsStep.Details, "\n")
+	for _, want := range []string{"interface=tg-test", "dns=1.1.1.1", "routing_domain=~.", "default_route=yes"} {
+		if !strings.Contains(dnsDetails, want) {
+			t.Fatalf("missing DNS detail %q: %#v", want, dnsStep.Details)
+		}
+	}
+	if strings.Contains(strings.Join(plan.Warnings, "\n"), "DNS adapter is not implemented") {
+		t.Fatalf("unexpected obsolete DNS warning: %#v", plan.Warnings)
+	}
 	assertPlanHasNoSecret(t, plan, config.WireGuardPrivateKey)
 	assertPlanHasNoSecret(t, plan, config.ServerPublicKey)
 	assertPlanHasNoSecret(t, plan, config.PresharedKey)
@@ -79,6 +95,19 @@ func TestConnectPlanRejectsInvalidEndpointIP(t *testing.T) {
 		t.Fatal("expected invalid endpoint IP error")
 	}
 	if !strings.Contains(err.Error(), "invalid endpoint IP") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConnectPlanRejectsInvalidDNS(t *testing.T) {
+	config := loadValidProfile(t)
+	config.DNS = "1.1.1.1,not-an-ip"
+
+	_, err := Connect(config, Options{})
+	if err == nil {
+		t.Fatal("expected invalid DNS error")
+	}
+	if !strings.Contains(err.Error(), "invalid DNS server") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -41,6 +41,9 @@ func TestNewStateFromConnectPlanIsSecretFree(t *testing.T) {
 	if len(state.WireGuardAllowedIPs) != 2 {
 		t.Fatalf("allowed IPs = %#v", state.WireGuardAllowedIPs)
 	}
+	if !state.DNSApplied || state.DNSInterface != "tg-v7" || len(state.DNSServers) != 1 || state.DNSServers[0] != "1.1.1.1" {
+		t.Fatalf("DNS state = applied:%t interface:%s servers:%#v", state.DNSApplied, state.DNSInterface, state.DNSServers)
+	}
 	payload, err := json.Marshal(state)
 	if err != nil {
 		t.Fatal(err)

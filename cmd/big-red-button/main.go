@@ -1332,6 +1332,10 @@ func printStatusSnapshot(stdout io.Writer, snapshot status.Snapshot) {
 		}
 		fmt.Fprintf(stdout, "profile fingerprint: %s\n", snapshot.Active.ProfileFingerprint)
 		fmt.Fprintf(stdout, "wireguard interface: %s\n", snapshot.Active.WireGuardInterface)
+		if snapshot.Active.DNSApplied {
+			fmt.Fprintf(stdout, "dns interface: %s\n", snapshot.Active.DNSInterface)
+			fmt.Fprintf(stdout, "dns servers: %s\n", strings.Join(snapshot.Active.DNSServers, ", "))
+		}
 		if snapshot.Active.AppProcess != nil {
 			fmt.Fprintf(stdout, "app pid: %d\n", snapshot.Active.AppProcess.PID)
 		}

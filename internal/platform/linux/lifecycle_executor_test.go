@@ -68,6 +68,9 @@ func TestLifecycleExecutorRunsConnectPlan(t *testing.T) {
 	if len(state.WireGuardAllowedIPs) != 2 {
 		t.Fatalf("runtime state allowed IPs = %#v", state.WireGuardAllowedIPs)
 	}
+	if !state.DNSApplied || state.DNSInterface != "tg-v7" || len(state.DNSServers) != 1 {
+		t.Fatalf("runtime DNS state = applied:%t interface:%s servers:%#v", state.DNSApplied, state.DNSInterface, state.DNSServers)
+	}
 	commands := flattenArgv(runner.argv)
 	for _, want := range []string{
 		"ip -4 route replace 203.0.113.10/32 via 192.0.2.1 dev eth0",
@@ -75,6 +78,9 @@ func TestLifecycleExecutorRunsConnectPlan(t *testing.T) {
 		"wg setconf tg-v7 " + runtimeRoot + "/wg-setconf.conf",
 		"ip -4 route replace 0.0.0.0/0 dev tg-v7",
 		"ip -6 route replace ::/0 dev tg-v7",
+		"resolvectl dns tg-v7 1.1.1.1",
+		"resolvectl domain tg-v7 ~.",
+		"resolvectl default-route tg-v7 yes",
 	} {
 		if !strings.Contains(commands, want) {
 			t.Fatalf("missing %q in commands:\n%s", want, commands)
@@ -153,6 +159,9 @@ func TestLifecycleExecutorRunsDisconnectPlanFromRuntimeState(t *testing.T) {
 		WireGuardInterface:  "tg-v7",
 		RouteExclusions:     []routes.EndpointExclusion{exclusion},
 		WireGuardAllowedIPs: []string{"0.0.0.0/0", "::/0"},
+		DNSInterface:        "tg-v7",
+		DNSServers:          []string{"1.1.1.1"},
+		DNSApplied:          true,
 	}.WithWSTunnelProcess(4242, []string{"wstunnel", "client"})
 	if err := (truntime.Store{Root: runtimeRoot}).Save(context.Background(), state); err != nil {
 		t.Fatal(err)
@@ -183,6 +192,7 @@ func TestLifecycleExecutorRunsDisconnectPlanFromRuntimeState(t *testing.T) {
 	}
 	commands := flattenArgv(runner.argv)
 	for _, want := range []string{
+		"resolvectl revert tg-v7",
 		"ip -4 route delete 0.0.0.0/0 dev tg-v7",
 		"ip -6 route delete ::/0 dev tg-v7",
 		"ip link delete dev tg-v7",

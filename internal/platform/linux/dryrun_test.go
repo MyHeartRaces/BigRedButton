@@ -32,6 +32,9 @@ func TestDryRunExecutorRecordsConcreteRouteCommands(t *testing.T) {
 	want := [][]string{
 		{"ip", "-4", "route", "get", "203.0.113.10"},
 		{"ip", "-4", "route", "replace", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"},
+		{"resolvectl", "dns", "tg-v7", "1.1.1.1"},
+		{"resolvectl", "domain", "tg-v7", "~."},
+		{"resolvectl", "default-route", "tg-v7", "yes"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
@@ -42,6 +45,9 @@ func TestDryRunExecutorRecordsConcreteRouteCommands(t *testing.T) {
 	}
 	if len(state.RouteExclusions) != 1 {
 		t.Fatalf("runtime route exclusions = %#v", state.RouteExclusions)
+	}
+	if !state.DNSApplied || len(state.DNSServers) != 1 {
+		t.Fatalf("runtime DNS state = %#v", state)
 	}
 }
 
@@ -95,6 +101,9 @@ func TestDryRunExecutorUsesReadOnlyDiscovery(t *testing.T) {
 	want := [][]string{
 		{"ip", "-4", "route", "get", "203.0.113.10"},
 		{"ip", "-4", "route", "replace", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"},
+		{"resolvectl", "dns", "tg-v7", "1.1.1.1"},
+		{"resolvectl", "domain", "tg-v7", "~."},
+		{"resolvectl", "default-route", "tg-v7", "yes"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
@@ -105,6 +114,9 @@ func TestDryRunExecutorUsesReadOnlyDiscovery(t *testing.T) {
 	}
 	if len(state.RouteExclusions) != 1 || state.RouteExclusions[0].Gateway != "192.0.2.1" {
 		t.Fatalf("runtime state = %#v", state)
+	}
+	if !state.DNSApplied || state.DNSInterface != "tg-v7" {
+		t.Fatalf("runtime DNS state = %#v", state)
 	}
 }
 
@@ -126,6 +138,29 @@ func TestDryRunExecutorRecordsRouteRollbackCommand(t *testing.T) {
 
 	got := operationArgv(executor.Operations())
 	want := [][]string{{"ip", "-4", "route", "delete", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %#v want %#v", got, want)
+	}
+}
+
+func TestDryRunExecutorRecordsDNSRollbackCommand(t *testing.T) {
+	plan := connectPlan(t, planner.Options{
+		EndpointIPs:      []string{"203.0.113.10"},
+		DefaultGateway:   "192.0.2.1",
+		DefaultInterface: "eth0",
+	})
+	executor, err := NewDryRunExecutor(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	step := findStep(plan, "apply-dns")
+	if err := executor.Rollback(context.Background(), step); err != nil {
+		t.Fatal(err)
+	}
+
+	got := operationArgv(executor.Operations())
+	want := [][]string{{"resolvectl", "revert", "tg-v7"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
 	}
@@ -168,7 +203,10 @@ func TestDryRunExecutorPersistsRuntimeStateAndDisconnectDeletesRoutes(t *testing
 	}
 
 	got := operationArgv(disconnectExecutor.Operations())
-	want := [][]string{{"ip", "-4", "route", "delete", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"}}
+	want := [][]string{
+		{"resolvectl", "revert", "tg-v7"},
+		{"ip", "-4", "route", "delete", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"},
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
 	}

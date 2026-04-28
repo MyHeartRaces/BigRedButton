@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,9 @@ type State struct {
 	WSTunnelProcess     *ProcessState              `json:"wstunnel_process,omitempty"`
 	AppProcess          *ProcessState              `json:"app_process,omitempty"`
 	WireGuardAllowedIPs []string                   `json:"wireguard_allowed_ips,omitempty"`
+	DNSInterface        string                     `json:"dns_interface,omitempty"`
+	DNSServers          []string                   `json:"dns_servers,omitempty"`
+	DNSApplied          bool                       `json:"dns_applied,omitempty"`
 	SessionID           string                     `json:"session_id,omitempty"`
 	AppID               string                     `json:"app_id,omitempty"`
 	Namespace           string                     `json:"namespace,omitempty"`
@@ -64,6 +68,11 @@ func NewStateFromConnectPlan(plan planner.Plan) (State, error) {
 		WireGuardInterface:  plan.WireGuardInterface,
 		RouteExclusions:     cloneRouteExclusions(plan.RouteExclusions),
 		WireGuardAllowedIPs: allowedIPsFromPlan(plan),
+	}
+	if len(plan.DNSServers) > 0 {
+		state.DNSInterface = plan.WireGuardInterface
+		state.DNSServers = append([]string(nil), plan.DNSServers...)
+		state.DNSApplied = true
 	}
 	if err := state.Validate(); err != nil {
 		return State{}, err
@@ -134,6 +143,19 @@ func (s State) Validate() error {
 	}
 	if s.AppProcess != nil && s.AppProcess.PID < 1 {
 		return fmt.Errorf("runtime state app process PID is required")
+	}
+	if s.DNSApplied {
+		if strings.TrimSpace(s.DNSInterface) == "" {
+			return fmt.Errorf("runtime state DNS interface is required")
+		}
+		if len(s.DNSServers) == 0 {
+			return fmt.Errorf("runtime state DNS servers are required")
+		}
+	}
+	for index, server := range s.DNSServers {
+		if _, err := netip.ParseAddr(strings.TrimSpace(server)); err != nil {
+			return fmt.Errorf("runtime state DNS server %d is invalid: %w", index, err)
+		}
 	}
 	return nil
 }

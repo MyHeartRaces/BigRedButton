@@ -13,6 +13,7 @@ import (
 
 type LifecycleExecutor struct {
 	route     *RouteExecutor
+	dns       *DNSExecutor
 	wstunnel  *supervisor.WSTunnelExecutor
 	wireguard *WireGuardExecutor
 	stopper   supervisor.ProcessStopper
@@ -88,6 +89,7 @@ func NewLifecycleExecutor(options LifecycleExecutorOptions) (*LifecycleExecutor,
 
 	return &LifecycleExecutor{
 		route:     routeExecutor,
+		dns:       NewDNSExecutor(options.Plan, options.CommandRunner),
 		wstunnel:  wstunnelExecutor,
 		wireguard: wireGuardExecutor,
 		stopper:   stopper,
@@ -103,6 +105,16 @@ func (e *LifecycleExecutor) Apply(ctx context.Context, step planner.Step) error 
 	}
 	if step.ID == "store-runtime-state" {
 		return e.storeRuntimeState(ctx, step)
+	}
+	if step.ID == "apply-dns" {
+		return e.dns.Apply(ctx, step)
+	}
+	if step.ID == "restore-dns" {
+		state, err := e.route.stateForDisconnect(ctx)
+		if err != nil {
+			return err
+		}
+		return e.dns.Restore(ctx, step, state)
 	}
 	if isRouteExecutorStep("connect", step) || isRouteExecutorStep("disconnect", step) {
 		return e.route.Apply(ctx, step)
@@ -128,6 +140,9 @@ func (e *LifecycleExecutor) Rollback(ctx context.Context, step planner.Step) err
 	}
 	if isRouteRollbackStep(step) {
 		return e.route.Rollback(ctx, step)
+	}
+	if step.ID == "apply-dns" {
+		return e.dns.Rollback(ctx, step)
 	}
 	if step.ID == "start-wstunnel" {
 		return e.wstunnel.Rollback(ctx, step)
@@ -177,6 +192,13 @@ func (e *LifecycleExecutor) RouteOperations() []Operation {
 	return e.route.Operations()
 }
 
+func (e *LifecycleExecutor) DNSOperations() []Operation {
+	if e == nil || e.dns == nil {
+		return nil
+	}
+	return e.dns.Operations()
+}
+
 func (e *LifecycleExecutor) WSTunnelOperations() []supervisor.WSTunnelOperation {
 	if e == nil || e.wstunnel == nil {
 		return nil
@@ -193,7 +215,7 @@ func (e *LifecycleExecutor) WireGuardOperations() []Operation {
 
 func isNoopLifecycleStep(step planner.Step) bool {
 	switch step.ID {
-	case "validate-profile", "resolve-wstunnel-host", "restore-dns", "dns-plan", "verify-connected":
+	case "validate-profile", "resolve-wstunnel-host", "skip-dns", "verify-connected":
 		return true
 	default:
 		return false
