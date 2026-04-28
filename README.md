@@ -22,7 +22,7 @@ Implemented:
 - local VPN profile parser and validator
 - secret-redacted profile summary
 - connect/disconnect planner
-- runtime status snapshots
+- runtime status snapshots with Linux process health checks
 - Linux route exclusions for the tunnel gateway
 - Linux system tunnel prerequisite checks before network mutation
 - tunnel helper command builder and process executor

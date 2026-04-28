@@ -81,26 +81,33 @@ func snapshotFromState(root string, state *truntime.State) Snapshot {
 		RuntimeRoot: root,
 		Active:      state,
 	}
-	markMissingIsolatedProcesses(&snapshot)
+	markMissingProcesses(&snapshot)
 	return snapshot
 }
 
-func markMissingIsolatedProcesses(snapshot *Snapshot) {
-	if snapshot == nil || snapshot.Active == nil || snapshot.Active.Mode != planner.IsolatedAppTunnelKind || stdruntime.GOOS != "linux" {
+func markMissingProcesses(snapshot *Snapshot) {
+	if snapshot == nil || snapshot.Active == nil || stdruntime.GOOS != "linux" {
 		return
 	}
 	var missing []string
-	if process := snapshot.Active.AppProcess; process != nil && !linuxPIDExists(process.PID) {
-		missing = append(missing, "app pid "+strconv.Itoa(process.PID))
+	if snapshot.Active.Mode == planner.IsolatedAppTunnelKind {
+		if process := snapshot.Active.AppProcess; process != nil && !linuxPIDExists(process.PID) {
+			missing = append(missing, "app pid "+strconv.Itoa(process.PID))
+		}
 	}
-	if process := snapshot.Active.WSTunnelProcess; process != nil && !linuxPIDExists(process.PID) {
+	if snapshot.Active.WSTunnelProcess != nil && !linuxPIDExists(snapshot.Active.WSTunnelProcess.PID) {
+		process := snapshot.Active.WSTunnelProcess
 		missing = append(missing, "wstunnel pid "+strconv.Itoa(process.PID))
 	}
 	if len(missing) == 0 {
 		return
 	}
 	snapshot.State = StateDirty
-	snapshot.Error = "isolated session process is not running: " + strings.Join(missing, ", ")
+	if snapshot.Active.Mode == planner.IsolatedAppTunnelKind {
+		snapshot.Error = "isolated session process is not running: " + strings.Join(missing, ", ")
+		return
+	}
+	snapshot.Error = "system tunnel process is not running: " + strings.Join(missing, ", ")
 }
 
 func linuxPIDExists(pid int) bool {

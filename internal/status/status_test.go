@@ -92,6 +92,30 @@ func TestFromStoreDirtyWhenLinuxIsolatedProcessIsMissing(t *testing.T) {
 	}
 }
 
+func TestFromStoreDirtyWhenLinuxSystemWSTunnelProcessIsMissing(t *testing.T) {
+	if stdruntime.GOOS != "linux" {
+		t.Skip("Linux /proc process health check")
+	}
+	store := truntime.Store{Root: t.TempDir()}
+	err := store.Save(context.Background(), truntime.State{
+		Version:            truntime.StateVersion,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "tg-test",
+	}.WithWSTunnelProcess(999999999, []string{"wstunnel", "client"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := FromStore(context.Background(), store)
+
+	if snapshot.State != StateDirty {
+		t.Fatalf("state = %s", snapshot.State)
+	}
+	if !strings.Contains(snapshot.Error, "wstunnel pid 999999999") {
+		t.Fatalf("error = %s", snapshot.Error)
+	}
+}
+
 func TestIsolatedSessions(t *testing.T) {
 	runtimeRoot := t.TempDir()
 	sessionID := "123e4567-e89b-12d3-a456-426614174000"

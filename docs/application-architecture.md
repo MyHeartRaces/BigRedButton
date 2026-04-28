@@ -383,6 +383,10 @@ Initial diagnostic bundle:
 - recent sanitized helper events
 - recent sanitized WSTunnel process events
 
+On Linux, status marks runtime state dirty when a saved launcher-owned process
+PID no longer exists. System-wide mode checks the WSTunnel process. Isolated app
+mode checks both the selected app process and the WSTunnel control process.
+
 Raw private keys, preshared keys and full profile payloads must never appear in
 diagnostics.
 
