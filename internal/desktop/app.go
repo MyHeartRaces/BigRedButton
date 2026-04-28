@@ -243,16 +243,12 @@ func (a *app) connect(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "upload a profile first"})
 		return
 	}
-	if strings.TrimSpace(state.EndpointIP) == "" {
-		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "endpoint IP is required"})
+	args, err := buildLinuxConnectArgs(state, status.FromStore(r.Context(), truntime.Store{Root: planner.DefaultRuntimeRoot}))
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
 		return
 	}
 
-	args := []string{"linux-connect", "-yes", "-endpoint-ip", state.EndpointIP}
-	if strings.TrimSpace(state.WSTunnelBinary) != "" {
-		args = append(args, "-wstunnel-binary", state.WSTunnelBinary)
-	}
-	args = append(args, state.ProfilePath)
 	response := a.runCLI(r.Context(), "connect", args)
 	state.LastCommand = "connect"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
@@ -529,6 +525,26 @@ func decodeAction(reader io.Reader) (actionRequest, error) {
 	request.SessionID = strings.TrimSpace(request.SessionID)
 	request.AppCommand = strings.TrimSpace(request.AppCommand)
 	return request, nil
+}
+
+func buildLinuxConnectArgs(state guiState, runtime status.Snapshot) ([]string, error) {
+	profilePath := strings.TrimSpace(state.ProfilePath)
+	if profilePath == "" {
+		return nil, errors.New("upload a profile first")
+	}
+	endpointIP := strings.TrimSpace(state.EndpointIP)
+	if endpointIP == "" && runtime.State == status.StateIdle {
+		return nil, errors.New("endpoint IP is required")
+	}
+	args := []string{"linux-connect", "-yes"}
+	if endpointIP != "" {
+		args = append(args, "-endpoint-ip", endpointIP)
+	}
+	if wstunnelBinary := strings.TrimSpace(state.WSTunnelBinary); wstunnelBinary != "" {
+		args = append(args, "-wstunnel-binary", wstunnelBinary)
+	}
+	args = append(args, profilePath)
+	return args, nil
 }
 
 func desktopLaunchEnv() []string {
