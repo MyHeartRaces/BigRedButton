@@ -42,6 +42,7 @@ package() {
   install -Dm755 "build/${pkgname}-gui" "${pkgdir}/usr/bin/${pkgname}-gui"
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
   install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+  install -Dm755 "scripts/linux-smoke.sh" "${pkgdir}/usr/share/doc/${pkgname}/linux-smoke.sh"
   install -Dm644 "packaging/linux/${pkgname}.desktop" "${pkgdir}/usr/share/applications/${pkgname}.desktop"
   install -Dm644 "packaging/assets/${pkgname}.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${pkgname}.svg"
   install -Dm644 "packaging/linux/com.myheartraces.bigredbutton.policy" "${pkgdir}/usr/share/polkit-1/actions/com.myheartraces.bigredbutton.policy"

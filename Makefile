@@ -28,6 +28,7 @@ install: build
 	install -m755 build/$(GUI_BINARY) "$(DESTDIR)$(PREFIX)/bin/$(GUI_BINARY)"
 	install -m644 LICENSE "$(DESTDIR)$(PREFIX)/share/licenses/$(BINARY)/LICENSE"
 	install -m644 README.md "$(DESTDIR)$(PREFIX)/share/doc/$(BINARY)/README.md"
+	install -m755 scripts/linux-smoke.sh "$(DESTDIR)$(PREFIX)/share/doc/$(BINARY)/linux-smoke.sh"
 	install -m644 packaging/linux/$(BINARY).desktop "$(DESTDIR)$(PREFIX)/share/applications/$(BINARY).desktop"
 	install -m644 packaging/assets/$(BINARY).svg "$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(BINARY).svg"
 	install -m644 packaging/linux/com.myheartraces.bigredbutton.policy "$(DESTDIR)$(PREFIX)/share/polkit-1/actions/com.myheartraces.bigredbutton.policy"

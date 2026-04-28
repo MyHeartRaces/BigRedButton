@@ -144,6 +144,7 @@ The package installs:
 
 - `/usr/bin/big-red-button`
 - `/usr/bin/big-red-button-gui`
+- `/usr/share/doc/big-red-button/linux-smoke.sh`
 - `/usr/share/applications/big-red-button.desktop`
 - `/usr/share/icons/hicolor/scalable/apps/big-red-button.svg`
 - `/usr/share/polkit-1/actions/com.myheartraces.bigredbutton.policy`
@@ -180,6 +181,18 @@ big-red-button linux-preflight \
   -require-pkexec \
   /path/to/profile.json
 ```
+
+Repeatable Linux smoke run:
+
+```bash
+/usr/share/doc/big-red-button/linux-smoke.sh \
+  --profile /path/to/profile.json \
+  --wstunnel-binary /usr/bin/wstunnel
+```
+
+The smoke script runs validation, preflight, dry-run planning and a diagnostics
+bundle by default. Add `--real-connect` only on a test machine where changing
+networking state is acceptable.
 
 ## Real Linux Connect
 
