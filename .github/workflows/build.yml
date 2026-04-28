@@ -17,6 +17,17 @@ env:
   VERSION: 0.2.1
 
 jobs:
+  script-checks:
+    name: Script syntax
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate shell scripts
+        run: bash -n scripts/build-arch-package.sh scripts/build-macos-package.sh scripts/linux-smoke.sh
+
   windows-11-arm64:
     name: Windows 11 arm64
     runs-on: windows-11-arm

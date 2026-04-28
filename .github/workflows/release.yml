@@ -20,6 +20,17 @@ env:
   GUI_BINARY_NAME: big-red-button-gui
 
 jobs:
+  script-checks:
+    name: Script syntax
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate shell scripts
+        run: bash -n scripts/build-arch-package.sh scripts/build-macos-package.sh scripts/linux-smoke.sh
+
   windows-11-arm64:
     name: Windows 11 arm64
     runs-on: windows-11-arm
@@ -227,6 +238,7 @@ jobs:
       - windows-amd64
       - macos-arm64
       - arch-linux
+      - script-checks
 
     steps:
       - name: Download artifacts
