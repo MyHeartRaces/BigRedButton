@@ -199,7 +199,6 @@ func TestLifecycleExecutorFailsBeforeMutationWhenPrerequisiteMissing(t *testing.
 
 func TestLifecycleExecutorRunsDisconnectPlanFromRuntimeState(t *testing.T) {
 	runtimeRoot := t.TempDir()
-	profileConfig := linuxProfile(t)
 	exclusion, err := routes.NewEndpointExclusion("203.0.113.10", "192.0.2.1", "eth0")
 	if err != nil {
 		t.Fatal(err)
@@ -225,7 +224,6 @@ func TestLifecycleExecutorRunsDisconnectPlanFromRuntimeState(t *testing.T) {
 	stopper := &lifecycleStopper{}
 	executor, err := NewLifecycleExecutor(LifecycleExecutorOptions{
 		Plan:           plan,
-		Profile:        profileConfig,
 		CommandRunner:  runner,
 		ProcessStopper: stopper,
 		RuntimeRoot:    runtimeRoot,
@@ -260,7 +258,6 @@ func TestLifecycleExecutorRunsDisconnectPlanFromRuntimeState(t *testing.T) {
 
 func TestLifecycleExecutorDisconnectIsIdempotentWhenRuntimeStateMissing(t *testing.T) {
 	runtimeRoot := t.TempDir()
-	profileConfig := linuxProfile(t)
 	plan, err := planner.Disconnect(planner.Options{RuntimeRoot: runtimeRoot})
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +266,6 @@ func TestLifecycleExecutorDisconnectIsIdempotentWhenRuntimeStateMissing(t *testi
 	stopper := &lifecycleStopper{}
 	executor, err := NewLifecycleExecutor(LifecycleExecutorOptions{
 		Plan:           plan,
-		Profile:        profileConfig,
 		CommandRunner:  runner,
 		ProcessStopper: stopper,
 		RuntimeRoot:    runtimeRoot,

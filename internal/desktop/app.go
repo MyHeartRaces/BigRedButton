@@ -267,12 +267,7 @@ func (a *app) disconnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := a.loadState()
-	if strings.TrimSpace(state.ProfilePath) == "" {
-		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "upload a profile first"})
-		return
-	}
-
-	response := a.runCLI(r.Context(), "disconnect", []string{"linux-disconnect", "-yes", state.ProfilePath})
+	response := a.runCLI(r.Context(), "disconnect", []string{"linux-disconnect", "-yes"})
 	state.LastCommand = "disconnect"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output

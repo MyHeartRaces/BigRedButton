@@ -67,8 +67,8 @@ type WireGuardExecutorOptions struct {
 }
 
 func NewWireGuardExecutor(options WireGuardExecutorOptions) (*WireGuardExecutor, error) {
-	if err := options.Config.Validate(); err != nil {
-		return nil, err
+	if strings.TrimSpace(options.Config.InterfaceName) == "" {
+		return nil, fmt.Errorf("wireguard interface name is required")
 	}
 	runner := options.Runner
 	if runner == nil {
@@ -83,6 +83,16 @@ func NewWireGuardExecutor(options WireGuardExecutorOptions) (*WireGuardExecutor,
 		runner: runner,
 		writer: writer,
 	}, nil
+}
+
+func (e *WireGuardExecutor) SetRuntimeConfig(interfaceName string, allowedIPs []string) {
+	if e == nil {
+		return
+	}
+	if strings.TrimSpace(interfaceName) != "" {
+		e.config.InterfaceName = strings.TrimSpace(interfaceName)
+	}
+	e.config.AllowedIPs = append([]string(nil), allowedIPs...)
 }
 
 func (e *WireGuardExecutor) Apply(ctx context.Context, step planner.Step) error {

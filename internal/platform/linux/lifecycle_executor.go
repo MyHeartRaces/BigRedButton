@@ -12,6 +12,7 @@ import (
 )
 
 type LifecycleExecutor struct {
+	plan      planner.Plan
 	route     *RouteExecutor
 	dns       *DNSExecutor
 	wstunnel  *supervisor.WSTunnelExecutor
@@ -54,29 +55,36 @@ func NewLifecycleExecutor(options LifecycleExecutorOptions) (*LifecycleExecutor,
 		return nil, err
 	}
 
-	wstunnelCommand, err := supervisor.WSTunnelClientCommand(supervisor.WSTunnelClientConfig{
-		Binary:         firstNonEmpty(options.WSTunnelBinary, planner.DefaultWSTunnelBinary),
-		ServerURL:      options.Profile.WSTunnelURL,
-		PathPrefix:     options.Profile.WSTunnelPath,
-		TLSServerName:  firstNonEmpty(options.Profile.WSTunnelTLSName, options.Profile.SNI),
-		LocalUDPListen: options.Profile.LocalUDPListen,
-		RemoteUDPHost:  options.WSTunnelRemoteHost,
-		RemoteUDPPort:  options.WSTunnelRemotePort,
-		LogLevel:       options.WSTunnelLogLevel,
-	})
-	if err != nil {
-		return nil, err
-	}
-	wstunnelExecutor, err := supervisor.NewWSTunnelExecutor(supervisor.WSTunnelExecutorOptions{
-		Command: wstunnelCommand,
-		Runner:  options.ProcessRunner,
-	})
-	if err != nil {
-		return nil, err
+	var wstunnelExecutor *supervisor.WSTunnelExecutor
+	if options.Plan.Kind != "disconnect" {
+		wstunnelCommand, err := supervisor.WSTunnelClientCommand(supervisor.WSTunnelClientConfig{
+			Binary:         firstNonEmpty(options.WSTunnelBinary, planner.DefaultWSTunnelBinary),
+			ServerURL:      options.Profile.WSTunnelURL,
+			PathPrefix:     options.Profile.WSTunnelPath,
+			TLSServerName:  firstNonEmpty(options.Profile.WSTunnelTLSName, options.Profile.SNI),
+			LocalUDPListen: options.Profile.LocalUDPListen,
+			RemoteUDPHost:  options.WSTunnelRemoteHost,
+			RemoteUDPPort:  options.WSTunnelRemotePort,
+			LogLevel:       options.WSTunnelLogLevel,
+		})
+		if err != nil {
+			return nil, err
+		}
+		wstunnelExecutor, err = supervisor.NewWSTunnelExecutor(supervisor.WSTunnelExecutorOptions{
+			Command: wstunnelCommand,
+			Runner:  options.ProcessRunner,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
+	wireGuardConfig := wireguard.ConfigFromProfile(options.Profile, wireGuardIface)
+	if options.Plan.Kind == "disconnect" {
+		wireGuardConfig = wireguard.Config{InterfaceName: wireGuardIface}
+	}
 	wireGuardExecutor, err := NewWireGuardExecutor(WireGuardExecutorOptions{
-		Config:       wireguard.ConfigFromProfile(options.Profile, wireGuardIface),
+		Config:       wireGuardConfig,
 		Runner:       options.CommandRunner,
 		ConfigWriter: options.WGConfigWriter,
 		RuntimeRoot:  runtimeRoot,
@@ -90,6 +98,7 @@ func NewLifecycleExecutor(options LifecycleExecutorOptions) (*LifecycleExecutor,
 	}
 
 	return &LifecycleExecutor{
+		plan:      options.Plan,
 		route:     routeExecutor,
 		dns:       NewDNSExecutor(options.Plan, options.CommandRunner),
 		wstunnel:  wstunnelExecutor,
@@ -136,6 +145,11 @@ func (e *LifecycleExecutor) Apply(ctx context.Context, step planner.Step) error 
 		return e.stopWSTunnel(ctx, step)
 	}
 	if isWireGuardStep(step) {
+		if e.plan.Kind == "disconnect" {
+			if err := e.configureWireGuardFromRuntime(ctx); err != nil {
+				return err
+			}
+		}
 		return e.wireguard.Apply(ctx, step)
 	}
 	return fmt.Errorf("unsupported linux lifecycle step: %s", step.ID)
@@ -202,6 +216,15 @@ func (e *LifecycleExecutor) stopWSTunnel(ctx context.Context, step planner.Step)
 		return err
 	}
 	e.route.recordRuntime(OperationApply, step.ID, fmt.Sprintf("stop pid %d", state.WSTunnelProcess.PID))
+	return nil
+}
+
+func (e *LifecycleExecutor) configureWireGuardFromRuntime(ctx context.Context) error {
+	state, err := e.route.stateForDisconnect(ctx)
+	if err != nil {
+		return err
+	}
+	e.wireguard.SetRuntimeConfig(state.WireGuardInterface, state.WireGuardAllowedIPs)
 	return nil
 }
 

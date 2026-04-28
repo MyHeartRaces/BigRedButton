@@ -966,8 +966,8 @@ func linuxDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: big-red-button linux-disconnect -yes [-json] [-runtime-root path] <profile.json>")
+	if fs.NArg() > 1 {
+		fmt.Fprintln(stderr, "usage: big-red-button linux-disconnect -yes [-json] [-runtime-root path] [profile.json]")
 		return 2
 	}
 	if !*confirmed {
@@ -979,10 +979,14 @@ func linuxDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 
-	config, err := profile.LoadFile(fs.Arg(0))
-	if err != nil {
-		printProfileError(err, stderr, *jsonOutput, stdout)
-		return 1
+	var config profile.Config
+	if fs.NArg() == 1 {
+		var err error
+		config, err = profile.LoadFile(fs.Arg(0))
+		if err != nil {
+			printProfileError(err, stderr, *jsonOutput, stdout)
+			return 1
+		}
 	}
 	plan, err := planner.Disconnect(planner.Options{
 		WireGuardInterface: *wireguardInterface,
@@ -1648,5 +1652,5 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  linux-stop-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-cleanup-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-recover-isolated-sessions -yes [-json] [-all] [-runtime-root path]")
-	fmt.Fprintln(w, "  linux-disconnect -yes [-json] [-runtime-root path] <profile.json>")
+	fmt.Fprintln(w, "  linux-disconnect -yes [-json] [-runtime-root path] [profile.json]")
 }

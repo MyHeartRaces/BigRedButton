@@ -58,10 +58,12 @@ func TestWireGuardExecutorAppliesInterfacePeerAndRoutes(t *testing.T) {
 }
 
 func TestWireGuardExecutorDisconnectRemovesRoutesAndInterface(t *testing.T) {
-	config := wireGuardConfig(t)
 	runner := &recordingRunner{}
 	executor, err := NewWireGuardExecutor(WireGuardExecutorOptions{
-		Config: config,
+		Config: wireguard.Config{
+			InterfaceName: "tg-v7",
+			AllowedIPs:    []string{"0.0.0.0/0", "::/0"},
+		},
 		Runner: runner,
 	})
 	if err != nil {
@@ -84,6 +86,21 @@ func TestWireGuardExecutorDisconnectRemovesRoutesAndInterface(t *testing.T) {
 	}
 	if !reflect.DeepEqual(runner.argv, want) {
 		t.Fatalf("commands = %#v want %#v", runner.argv, want)
+	}
+}
+
+func TestWireGuardExecutorApplyPeerValidatesFullConfig(t *testing.T) {
+	executor, err := NewWireGuardExecutor(WireGuardExecutorOptions{
+		Config: wireguard.Config{InterfaceName: "tg-v7"},
+		Runner: &recordingRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = executor.Apply(context.Background(), planner.Step{ID: "apply-wireguard-peer"})
+	if err == nil || !strings.Contains(err.Error(), "wireguard private key is required") {
+		t.Fatalf("expected full config validation error, got %v", err)
 	}
 }
 

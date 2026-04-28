@@ -180,8 +180,11 @@ a known resolved endpoint.
 Disconnect:
 
 ```bash
-sudo big-red-button linux-disconnect -yes /path/to/profile.json
+sudo big-red-button linux-disconnect -yes
 ```
+
+Disconnect reads launcher-owned runtime state, so it does not require the
+profile file. A profile path is still accepted for compatibility.
 
 Status:
 

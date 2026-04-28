@@ -758,13 +758,31 @@ func TestLinuxDisconnectRequiresConfirmation(t *testing.T) {
 
 	code := run([]string{
 		"linux-disconnect",
-		"../../testdata/profiles/valid-wgws.json",
 	}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "requires -yes") {
 		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}
+
+func TestLinuxDisconnectNoProfileIsIdleWhenRuntimeMissing(t *testing.T) {
+	defer forceGOOS("linux")()
+	var stdout, stderr bytes.Buffer
+	runtimeRoot := t.TempDir()
+
+	code := run([]string{
+		"linux-disconnect",
+		"-yes",
+		"-runtime-root", runtimeRoot,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "engine state: Idle") || !strings.Contains(out, "no runtime state at") {
+		t.Fatalf("expected idle disconnect without profile, got: %s", out)
 	}
 }
 
