@@ -258,6 +258,38 @@ func TestLifecycleExecutorRunsDisconnectPlanFromRuntimeState(t *testing.T) {
 	}
 }
 
+func TestLifecycleExecutorDisconnectIsIdempotentWhenRuntimeStateMissing(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	profileConfig := linuxProfile(t)
+	plan, err := planner.Disconnect(planner.Options{RuntimeRoot: runtimeRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &recordingRunner{}
+	stopper := &lifecycleStopper{}
+	executor, err := NewLifecycleExecutor(LifecycleExecutorOptions{
+		Plan:           plan,
+		Profile:        profileConfig,
+		CommandRunner:  runner,
+		ProcessStopper: stopper,
+		RuntimeRoot:    runtimeRoot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := engine.New(executor).Run(context.Background(), plan)
+	if result.State != engine.StateIdle {
+		t.Fatalf("state = %s error = %s", result.State, result.Error)
+	}
+	if len(runner.argv) != 0 {
+		t.Fatalf("expected no network commands without runtime state, got %#v", runner.argv)
+	}
+	if len(stopper.stopped) != 0 {
+		t.Fatalf("expected no stopped processes without runtime state, got %#v", stopper.stopped)
+	}
+}
+
 func linuxProfile(t *testing.T) profile.Config {
 	t.Helper()
 	config, err := profile.LoadFile("../../../testdata/profiles/valid-wgws.json")

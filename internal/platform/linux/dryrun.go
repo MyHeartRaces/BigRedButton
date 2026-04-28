@@ -2,7 +2,9 @@ package linux
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -36,6 +38,7 @@ type DryRunExecutor struct {
 	store                     truntime.Store
 	readOnlyDiscovery         bool
 	persistRuntimeState       bool
+	runtimeStateMissing       bool
 	operations                []Operation
 }
 
@@ -144,12 +147,22 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 	case step.ID == "read-runtime-state":
 		state, err := e.store.Load(ctx)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				e.runtimeStateMissing = true
+				e.recordRuntime(OperationApply, step.ID, "no runtime state at "+e.storePath())
+				break
+			}
 			return err
 		}
 		e.runtimeState = state
+		e.runtimeStateMissing = false
 		e.routeExclusionsByEndpoint = routeExclusionMap(state.RouteExclusions)
 		e.recordRuntime(OperationApply, step.ID, "load "+e.storePath())
 	case step.ID == "restore-dns":
+		if e.runtimeStateMissing {
+			e.recordRuntime(OperationApply, step.ID, "skip "+step.ID+": no runtime state")
+			break
+		}
 		state, err := e.stateForDisconnect(ctx)
 		if err != nil {
 			return err
@@ -168,6 +181,10 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 		}
 		e.record(OperationApply, step.ID, command)
 	case step.ID == "remove-endpoint-route-exclusions":
+		if e.runtimeStateMissing {
+			e.recordRuntime(OperationApply, step.ID, "skip "+step.ID+": no runtime state")
+			break
+		}
 		state, err := e.stateForDisconnect(ctx)
 		if err != nil {
 			return err
@@ -467,11 +484,19 @@ func (e *DryRunExecutor) stateForDisconnect(ctx context.Context) (truntime.State
 	if e.runtimeState.Version != 0 {
 		return e.runtimeState, nil
 	}
+	if e.runtimeStateMissing {
+		return truntime.State{}, nil
+	}
 	state, err := e.store.Load(ctx)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			e.runtimeStateMissing = true
+			return truntime.State{}, nil
+		}
 		return truntime.State{}, err
 	}
 	e.runtimeState = state
+	e.runtimeStateMissing = false
 	e.routeExclusionsByEndpoint = routeExclusionMap(state.RouteExclusions)
 	return state, nil
 }

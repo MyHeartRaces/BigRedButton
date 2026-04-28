@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
@@ -20,6 +21,7 @@ type RouteExecutor struct {
 	runtimeState              truntime.State
 	runner                    CommandRunner
 	store                     truntime.Store
+	runtimeStateMissing       bool
 	operations                []Operation
 }
 
@@ -113,9 +115,15 @@ func (e *RouteExecutor) Apply(ctx context.Context, step planner.Step) error {
 	case step.ID == "read-runtime-state":
 		state, err := e.store.Load(ctx)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				e.runtimeStateMissing = true
+				e.recordRuntime(OperationApply, step.ID, "no runtime state at "+e.storePath())
+				return nil
+			}
 			return err
 		}
 		e.runtimeState = state
+		e.runtimeStateMissing = false
 		e.routeExclusionsByEndpoint = routeExclusionMap(state.RouteExclusions)
 		e.recordRuntime(OperationApply, step.ID, "load "+e.storePath())
 	case step.ID == "remove-endpoint-route-exclusions":
@@ -246,11 +254,19 @@ func (e *RouteExecutor) stateForDisconnect(ctx context.Context) (truntime.State,
 	if e.runtimeState.Version != 0 {
 		return e.runtimeState, nil
 	}
+	if e.runtimeStateMissing {
+		return truntime.State{}, nil
+	}
 	state, err := e.store.Load(ctx)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			e.runtimeStateMissing = true
+			return truntime.State{}, nil
+		}
 		return truntime.State{}, err
 	}
 	e.runtimeState = state
+	e.runtimeStateMissing = false
 	e.routeExclusionsByEndpoint = routeExclusionMap(state.RouteExclusions)
 	return state, nil
 }

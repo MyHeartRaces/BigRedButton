@@ -109,6 +109,10 @@ func (e *LifecycleExecutor) Apply(ctx context.Context, step planner.Step) error 
 	if step.ID == "validate-linux-prerequisites" {
 		return e.validatePrerequisites(step)
 	}
+	if step.DependsOnRuntime && step.ID != "clear-runtime-state" && e.route.runtimeStateMissing {
+		e.route.recordRuntime(OperationApply, step.ID, "skip "+step.ID+": no runtime state")
+		return nil
+	}
 	if step.ID == "store-runtime-state" {
 		return e.storeRuntimeState(ctx, step)
 	}

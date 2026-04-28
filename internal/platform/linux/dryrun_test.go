@@ -216,6 +216,30 @@ func TestDryRunExecutorPersistsRuntimeStateAndDisconnectDeletesRoutes(t *testing
 	}
 }
 
+func TestDryRunExecutorDisconnectIsIdempotentWhenRuntimeStateMissing(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	disconnect, err := planner.Disconnect(planner.Options{RuntimeRoot: runtimeRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor, err := NewDryRunExecutorWithOptions(disconnect, DryRunOptions{
+		PersistRuntime: true,
+		RuntimeRoot:    runtimeRoot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := engine.New(executor).Run(context.Background(), disconnect)
+	if result.State != engine.StateIdle {
+		t.Fatalf("state = %s error = %s", result.State, result.Error)
+	}
+	got := operationArgv(executor.Operations())
+	if len(got) != 0 {
+		t.Fatalf("expected no commands without runtime state, got %#v", got)
+	}
+}
+
 func TestDryRunExecutorRecordsIsolatedAppCommands(t *testing.T) {
 	config, err := profile.LoadFile("../../../testdata/profiles/valid-wgws.json")
 	if err != nil {
