@@ -701,6 +701,9 @@ func buildLinuxConnectArgs(state guiState) ([]string, error) {
 
 func buildDiagnosticsArgs(state guiState) []string {
 	args := []string{"diagnostics", "-runtime-root", planner.DefaultRuntimeRoot}
+	if wstunnelBinary := strings.TrimSpace(state.WSTunnelBinary); wstunnelBinary != "" {
+		args = append(args, "-wstunnel-binary", wstunnelBinary)
+	}
 	if profilePath := strings.TrimSpace(state.ProfilePath); profilePath != "" {
 		args = append(args, "-profile", profilePath)
 	}
@@ -709,6 +712,9 @@ func buildDiagnosticsArgs(state guiState) []string {
 
 func buildDiagnosticsBundleArgs(state guiState, outputPath string) []string {
 	args := []string{"diagnostics-bundle", "-runtime-root", planner.DefaultRuntimeRoot, "-output", outputPath}
+	if wstunnelBinary := strings.TrimSpace(state.WSTunnelBinary); wstunnelBinary != "" {
+		args = append(args, "-wstunnel-binary", wstunnelBinary)
+	}
 	if profilePath := strings.TrimSpace(state.ProfilePath); profilePath != "" {
 		args = append(args, "-profile", profilePath)
 	}

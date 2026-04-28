@@ -390,6 +390,8 @@ func TestDiagnosticsCommand(t *testing.T) {
 	for _, want := range []string{
 		"generated at:",
 		"version: 0.2.1",
+		"host:",
+		"effective uid:",
 		"system runtime:",
 		"state: Idle",
 		"profile fingerprint:",
@@ -402,6 +404,38 @@ func TestDiagnosticsCommand(t *testing.T) {
 	}
 	if strings.Contains(out, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=") {
 		t.Fatalf("diagnostics leaked private key: %s", out)
+	}
+}
+
+func TestDiagnosticsCommandIncludesLinuxHostChecks(t *testing.T) {
+	defer forceGOOS("linux")()
+	defer stubCurrentEUID(1000)()
+	restoreLookPath := stubExecutableLookPath(func(binary string) (string, error) {
+		if binary == "pkexec" {
+			return "", fmt.Errorf("not found")
+		}
+		return "/usr/bin/" + filepath.Base(binary), nil
+	})
+	defer restoreLookPath()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"diagnostics",
+		"-runtime-root", t.TempDir(),
+		"-wstunnel-binary", "wstunnel-custom",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"ok binary ip: found",
+		"ok binary wstunnel-custom: found",
+		"failed binary pkexec:",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
 	}
 }
 

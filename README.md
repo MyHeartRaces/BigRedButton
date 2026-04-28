@@ -224,13 +224,16 @@ big-red-button diagnostics -profile /path/to/profile.json
 ```
 
 Diagnostics output includes redacted profile details, runtime state and known
-isolated sessions. It must not include WireGuard private keys or preshared keys.
+isolated sessions. On Linux it also includes host prerequisite checks for the
+networking tools used by system and isolated tunnel modes. It must not include
+WireGuard private keys or preshared keys.
 
 Diagnostics bundle for remote troubleshooting:
 
 ```bash
 big-red-button diagnostics-bundle \
   -profile /path/to/profile.json \
+  -wstunnel-binary /usr/bin/wstunnel \
   -output big-red-button-diagnostics.tar.gz
 ```
 

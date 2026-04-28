@@ -71,9 +71,12 @@ func TestBuildLinuxConnectArgsMakesEndpointOptional(t *testing.T) {
 }
 
 func TestBuildDiagnosticsArgsIncludesProfileWhenSaved(t *testing.T) {
-	args := buildDiagnosticsArgs(guiState{ProfilePath: " /tmp/profile.json "})
+	args := buildDiagnosticsArgs(guiState{
+		ProfilePath:    " /tmp/profile.json ",
+		WSTunnelBinary: " /usr/bin/wstunnel ",
+	})
 	got := strings.Join(args, " ")
-	want := "diagnostics -runtime-root /run/big-red-button -profile /tmp/profile.json"
+	want := "diagnostics -runtime-root /run/big-red-button -wstunnel-binary /usr/bin/wstunnel -profile /tmp/profile.json"
 	if got != want {
 		t.Fatalf("args = %q want %q", got, want)
 	}
@@ -87,9 +90,12 @@ func TestBuildDiagnosticsArgsIncludesProfileWhenSaved(t *testing.T) {
 }
 
 func TestBuildDiagnosticsBundleArgsIncludesOutputAndProfile(t *testing.T) {
-	args := buildDiagnosticsBundleArgs(guiState{ProfilePath: " /tmp/profile.json "}, "/tmp/brb-diag.tar.gz")
+	args := buildDiagnosticsBundleArgs(guiState{
+		ProfilePath:    " /tmp/profile.json ",
+		WSTunnelBinary: " /usr/bin/wstunnel ",
+	}, "/tmp/brb-diag.tar.gz")
 	got := strings.Join(args, " ")
-	want := "diagnostics-bundle -runtime-root /run/big-red-button -output /tmp/brb-diag.tar.gz -profile /tmp/profile.json"
+	want := "diagnostics-bundle -runtime-root /run/big-red-button -output /tmp/brb-diag.tar.gz -wstunnel-binary /usr/bin/wstunnel -profile /tmp/profile.json"
 	if got != want {
 		t.Fatalf("args = %q want %q", got, want)
 	}

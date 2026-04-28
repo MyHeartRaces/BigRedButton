@@ -375,15 +375,16 @@ func printDiagnostics(args []string, stdout io.Writer, stderr io.Writer) int {
 	jsonOutput := fs.Bool("json", false, "print JSON output")
 	runtimeRoot := fs.String("runtime-root", planner.DefaultRuntimeRoot, "launcher runtime state root")
 	profilePath := fs.String("profile", "", "optional profile path to summarize")
+	wstunnelBinary := fs.String("wstunnel-binary", "", "WSTunnel binary path/name for host checks")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "usage: big-red-button diagnostics [-json] [-runtime-root path] [-profile profile.json]")
+		fmt.Fprintln(stderr, "usage: big-red-button diagnostics [-json] [-runtime-root path] [-profile profile.json] [-wstunnel-binary path]")
 		return 2
 	}
 
-	output := collectDiagnostics(*runtimeRoot, *profilePath)
+	output := collectDiagnostics(*runtimeRoot, *profilePath, *wstunnelBinary)
 
 	if *jsonOutput {
 		writeJSON(stdout, output)
@@ -398,16 +399,17 @@ func writeDiagnosticsBundleCommand(args []string, stdout io.Writer, stderr io.Wr
 	fs.SetOutput(stderr)
 	runtimeRoot := fs.String("runtime-root", planner.DefaultRuntimeRoot, "launcher runtime state root")
 	profilePath := fs.String("profile", "", "optional profile path to summarize")
+	wstunnelBinary := fs.String("wstunnel-binary", "", "WSTunnel binary path/name for host checks")
 	outputPath := fs.String("output", "", "output .tar.gz path")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "usage: big-red-button diagnostics-bundle [-runtime-root path] [-profile profile.json] [-output path.tar.gz]")
+		fmt.Fprintln(stderr, "usage: big-red-button diagnostics-bundle [-runtime-root path] [-profile profile.json] [-wstunnel-binary path] [-output path.tar.gz]")
 		return 2
 	}
 
-	output := collectDiagnostics(*runtimeRoot, *profilePath)
+	output := collectDiagnostics(*runtimeRoot, *profilePath, *wstunnelBinary)
 	path := strings.TrimSpace(*outputPath)
 	if path == "" {
 		path = defaultDiagnosticsBundlePath(output.GeneratedAt)
@@ -420,7 +422,7 @@ func writeDiagnosticsBundleCommand(args []string, stdout io.Writer, stderr io.Wr
 	return 0
 }
 
-func collectDiagnostics(runtimeRoot string, profilePath string) diagnosticsOutput {
+func collectDiagnostics(runtimeRoot string, profilePath string, wstunnelBinary string) diagnosticsOutput {
 	runtimeRoot = strings.TrimSpace(runtimeRoot)
 	if runtimeRoot == "" {
 		runtimeRoot = planner.DefaultRuntimeRoot
@@ -429,6 +431,7 @@ func collectDiagnostics(runtimeRoot string, profilePath string) diagnosticsOutpu
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Version:     buildinfo.Current(),
 		OS:          currentGOOS,
+		Host:        collectHostDiagnostics(wstunnelBinary),
 		RuntimeRoot: runtimeRoot,
 		Runtime:     status.FromStore(context.Background(), truntime.Store{Root: runtimeRoot}),
 		ProfilePath: strings.TrimSpace(profilePath),
@@ -449,6 +452,30 @@ func collectDiagnostics(runtimeRoot string, profilePath string) diagnosticsOutpu
 		}
 	}
 	return output
+}
+
+func collectHostDiagnostics(wstunnelBinary string) diagnosticsHost {
+	host := diagnosticsHost{EffectiveUID: currentEUID()}
+	if executable, err := os.Executable(); err == nil {
+		host.Executable = executable
+	}
+	if currentGOOS != "linux" {
+		return host
+	}
+
+	binaries := []string{"ip", "wg"}
+	wstunnelBinary = strings.TrimSpace(wstunnelBinary)
+	if wstunnelBinary == "" {
+		wstunnelBinary = planner.DefaultWSTunnelBinary
+	}
+	binaries = append(binaries, wstunnelBinary, "resolvectl", "nft", "setpriv")
+	if currentEUID() != 0 {
+		binaries = append(binaries, "pkexec")
+	}
+	for _, binary := range binaries {
+		host.Checks = append(host.Checks, executableCheck("binary "+binary, binary))
+	}
+	return host
 }
 
 func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -1326,6 +1353,12 @@ type preflightCheck struct {
 	Detail string `json:"detail,omitempty"`
 }
 
+type diagnosticsHost struct {
+	Executable   string           `json:"executable,omitempty"`
+	EffectiveUID int              `json:"effective_uid"`
+	Checks       []preflightCheck `json:"checks,omitempty"`
+}
+
 type linuxLifecycleOutput struct {
 	Plan                planner.Plan                   `json:"plan"`
 	Result              engine.Result                  `json:"result"`
@@ -1353,6 +1386,7 @@ type diagnosticsOutput struct {
 	GeneratedAt      string                           `json:"generated_at"`
 	Version          buildinfo.Info                   `json:"version"`
 	OS               string                           `json:"os"`
+	Host             diagnosticsHost                  `json:"host"`
 	RuntimeRoot      string                           `json:"runtime_root"`
 	Runtime          status.Snapshot                  `json:"runtime"`
 	IsolatedSessions []status.IsolatedSessionSnapshot `json:"isolated_sessions,omitempty"`
@@ -1629,14 +1663,7 @@ func printLinuxPreflight(output linuxPreflightOutput, stdout io.Writer) {
 		fmt.Fprintln(stdout, "checks: []")
 		return
 	}
-	fmt.Fprintln(stdout, "checks:")
-	for _, check := range output.Checks {
-		if check.Detail == "" {
-			fmt.Fprintf(stdout, "- %s %s\n", check.Status, check.Name)
-			continue
-		}
-		fmt.Fprintf(stdout, "- %s %s: %s\n", check.Status, check.Name, check.Detail)
-	}
+	printChecks(stdout, output.Checks)
 }
 
 func linuxPreflightOK(output linuxPreflightOutput) bool {
@@ -1658,12 +1685,7 @@ func linuxPrerequisiteChecks(plan planner.Plan) []preflightCheck {
 			continue
 		}
 		for _, binary := range stepDetailValues(step, "binary") {
-			check := preflightCheck{Name: "binary " + binary, Status: "ok", Detail: "found"}
-			if err := platformlinux.ValidateExecutable(executableLookPath, binary); err != nil {
-				check.Status = "failed"
-				check.Detail = err.Error()
-			}
-			checks = append(checks, check)
+			checks = append(checks, executableCheck("binary "+binary, binary))
 		}
 	}
 	return checks
@@ -1673,8 +1695,12 @@ func linuxPKExecCheck() preflightCheck {
 	if currentEUID() == 0 {
 		return preflightCheck{Name: "privilege helper pkexec", Status: "ok", Detail: "running as root; pkexec is not required"}
 	}
-	check := preflightCheck{Name: "privilege helper pkexec", Status: "ok", Detail: "found"}
-	if err := platformlinux.ValidateExecutable(executableLookPath, "pkexec"); err != nil {
+	return executableCheck("privilege helper pkexec", "pkexec")
+}
+
+func executableCheck(name string, binary string) preflightCheck {
+	check := preflightCheck{Name: name, Status: "ok", Detail: "found"}
+	if err := platformlinux.ValidateExecutable(executableLookPath, binary); err != nil {
 		check.Status = "failed"
 		check.Detail = err.Error()
 	}
@@ -1695,12 +1721,7 @@ func linuxIsolatedAppExecutableCheck(plan planner.Plan) preflightCheck {
 	if executable == "" {
 		return preflightCheck{Name: "app executable", Status: "failed", Detail: "app executable is missing from plan"}
 	}
-	check := preflightCheck{Name: "app " + executable, Status: "ok", Detail: "found"}
-	if err := platformlinux.ValidateExecutable(executableLookPath, executable); err != nil {
-		check.Status = "failed"
-		check.Detail = err.Error()
-	}
-	return check
+	return executableCheck("app "+executable, executable)
 }
 
 func linuxIsolatedRuntimeCheck(plan planner.Plan) preflightCheck {
@@ -1822,6 +1843,12 @@ func printDiagnosticsOutput(stdout io.Writer, output diagnosticsOutput) {
 		fmt.Fprintf(stdout, "built: %s\n", output.Version.Date)
 	}
 	fmt.Fprintf(stdout, "os: %s\n", output.OS)
+	fmt.Fprintln(stdout, "host:")
+	if output.Host.Executable != "" {
+		fmt.Fprintf(stdout, "executable: %s\n", output.Host.Executable)
+	}
+	fmt.Fprintf(stdout, "effective uid: %d\n", output.Host.EffectiveUID)
+	printChecks(stdout, output.Host.Checks)
 	fmt.Fprintf(stdout, "runtime root: %s\n", output.RuntimeRoot)
 	fmt.Fprintln(stdout, "system runtime:")
 	printStatusSnapshot(stdout, output.Runtime)
@@ -1840,6 +1867,20 @@ func printDiagnosticsOutput(stdout io.Writer, output diagnosticsOutput) {
 		}
 	}
 	printIsolatedSessionList(stdout, output.IsolatedSessions, output.RuntimeRoot)
+}
+
+func printChecks(stdout io.Writer, checks []preflightCheck) {
+	if len(checks) == 0 {
+		return
+	}
+	fmt.Fprintln(stdout, "checks:")
+	for _, check := range checks {
+		if check.Detail == "" {
+			fmt.Fprintf(stdout, "- %s %s\n", check.Status, check.Name)
+			continue
+		}
+		fmt.Fprintf(stdout, "- %s %s: %s\n", check.Status, check.Name, check.Detail)
+	}
 }
 
 func writeDiagnosticsBundle(path string, output diagnosticsOutput) error {
@@ -2159,8 +2200,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  status [-json] [-runtime-root path]")
 	fmt.Fprintln(w, "  isolated-status [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  isolated-sessions [-json] [-runtime-root path]")
-	fmt.Fprintln(w, "  diagnostics [-json] [-runtime-root path] [-profile profile.json]")
-	fmt.Fprintln(w, "  diagnostics-bundle [-runtime-root path] [-profile profile.json] [-output path.tar.gz]")
+	fmt.Fprintln(w, "  diagnostics [-json] [-runtime-root path] [-profile profile.json] [-wstunnel-binary path]")
+	fmt.Fprintln(w, "  diagnostics-bundle [-runtime-root path] [-profile profile.json] [-wstunnel-binary path] [-output path.tar.gz]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  linux-preflight [-json] [-discover-routes] [-require-pkexec] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  linux-preflight-isolated-app [-json] [-require-pkexec] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
