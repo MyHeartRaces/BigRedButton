@@ -123,6 +123,82 @@ func TestPlanConnectEndpoint(t *testing.T) {
 	}
 }
 
+func TestConnectEndpointUsesCLIBackend(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("mutating daemon endpoints are Linux-only")
+	}
+	runner := &fakeCommandRunner{output: `{"result":{"state":"Connected"}}`}
+	runtimeRoot := t.TempDir()
+	handler := NewHandler(Options{
+		RuntimeRoot: runtimeRoot,
+		CLIPath:     "/usr/bin/big-red-button-test",
+		Runner:      runner,
+	})
+	payload, err := json.Marshal(ConnectRequest{
+		Profile: readProfileFixture(t, "valid-wgws.json"),
+		Options: planner.Options{
+			EndpointIPs:    []string{"203.0.113.10"},
+			WSTunnelBinary: "/usr/bin/wstunnel",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/connect", bytes.NewReader(payload))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response OperationResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.OK {
+		t.Fatalf("response = %#v", response)
+	}
+	if runner.name != "/usr/bin/big-red-button-test" {
+		t.Fatalf("runner name = %s", runner.name)
+	}
+	wantArgs := []string{"linux-connect", "-yes", "-json", "-endpoint-ip", "203.0.113.10", "-wstunnel-binary", "/usr/bin/wstunnel", "-runtime-root", runtimeRoot}
+	if !hasArgPrefix(runner.args, wantArgs) {
+		t.Fatalf("args = %#v want prefix %#v", runner.args, wantArgs)
+	}
+	if !runner.profileExisted {
+		t.Fatalf("expected temporary profile file to exist during command run")
+	}
+}
+
+func TestDisconnectEndpointUsesCLIBackend(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("mutating daemon endpoints are Linux-only")
+	}
+	runner := &fakeCommandRunner{output: `{"result":{"state":"Idle"}}`}
+	handler := NewHandler(Options{
+		RuntimeRoot: "/tmp/brb-runtime",
+		CLIPath:     "/usr/bin/big-red-button-test",
+		Runner:      runner,
+	})
+	payload, err := json.Marshal(DisconnectRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/disconnect", bytes.NewReader(payload))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	wantArgs := []string{"linux-disconnect", "-yes", "-json", "-runtime-root", "/tmp/brb-runtime"}
+	if !equalStrings(runner.args, wantArgs) {
+		t.Fatalf("args = %#v want %#v", runner.args, wantArgs)
+	}
+}
+
 func TestServeUnix(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix socket daemon transport is not available on Windows")
@@ -224,4 +300,47 @@ func readProfileFixture(t *testing.T, name string) []byte {
 		t.Fatal(err)
 	}
 	return payload
+}
+
+type fakeCommandRunner struct {
+	name           string
+	args           []string
+	output         string
+	err            error
+	profileExisted bool
+}
+
+func (r *fakeCommandRunner) Run(ctx context.Context, name string, args []string) (string, error) {
+	r.name = name
+	r.args = append([]string(nil), args...)
+	if len(args) > 0 {
+		if _, err := os.Stat(args[len(args)-1]); err == nil {
+			r.profileExisted = true
+		}
+	}
+	return r.output, r.err
+}
+
+func hasArgPrefix(args []string, prefix []string) bool {
+	if len(args) < len(prefix) {
+		return false
+	}
+	for index := range prefix {
+		if args[index] != prefix[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalStrings(left []string, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }

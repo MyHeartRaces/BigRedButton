@@ -21,10 +21,13 @@ import (
 )
 
 const DefaultSocketPath = "/run/big-red-button/launcher.sock"
+const DefaultSocketMode os.FileMode = 0o600
 const maxProfilePayloadBytes = 4 << 20
 
 type Options struct {
 	RuntimeRoot string
+	CLIPath     string
+	Runner      CommandRunner
 }
 
 type ValidateProfileResponse struct {
@@ -41,6 +44,38 @@ type PlanConnectRequest struct {
 type PlanConnectResponse struct {
 	Plan   *planner.Plan `json:"plan,omitempty"`
 	Errors []string      `json:"errors,omitempty"`
+}
+
+type ConnectRequest struct {
+	Profile json.RawMessage `json:"profile"`
+	Options planner.Options `json:"options,omitempty"`
+}
+
+type DisconnectRequest struct {
+	Options planner.Options `json:"options,omitempty"`
+}
+
+type IsolatedStartRequest struct {
+	Profile       json.RawMessage            `json:"profile"`
+	Options       planner.IsolatedAppOptions `json:"options,omitempty"`
+	CleanupOnExit *bool                      `json:"cleanup_on_exit,omitempty"`
+}
+
+type IsolatedSessionRequest struct {
+	SessionID   string `json:"session_id"`
+	RuntimeRoot string `json:"runtime_root,omitempty"`
+}
+
+type IsolatedRecoverRequest struct {
+	RuntimeRoot string `json:"runtime_root,omitempty"`
+	All         bool   `json:"all,omitempty"`
+	Startup     bool   `json:"startup,omitempty"`
+}
+
+type OperationResponse struct {
+	OK     bool   `json:"ok"`
+	Output string `json:"output"`
+	Error  string `json:"error,omitempty"`
 }
 
 type HealthResponse struct {
@@ -67,6 +102,11 @@ func NewHandler(options Options) http.Handler {
 	if runtimeRoot == "" {
 		runtimeRoot = planner.DefaultRuntimeRoot
 	}
+	service := newService(Options{
+		RuntimeRoot: runtimeRoot,
+		CLIPath:     options.CLIPath,
+		Runner:      options.Runner,
+	})
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -141,6 +181,72 @@ func NewHandler(options Options) http.Handler {
 		}
 		writeJSON(w, PlanConnectResponse{Plan: &plan})
 	})
+	mux.HandleFunc("/v1/connect", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSONStatus(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		var request ConnectRequest
+		if !decodeRequest(w, r.Body, &request) {
+			return
+		}
+		writeJSON(w, service.Connect(r.Context(), request))
+	})
+	mux.HandleFunc("/v1/disconnect", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSONStatus(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		var request DisconnectRequest
+		if !decodeRequest(w, r.Body, &request) {
+			return
+		}
+		writeJSON(w, service.Disconnect(r.Context(), request))
+	})
+	mux.HandleFunc("/v1/isolated/start", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSONStatus(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		var request IsolatedStartRequest
+		if !decodeRequest(w, r.Body, &request) {
+			return
+		}
+		writeJSON(w, service.StartIsolated(r.Context(), request))
+	})
+	mux.HandleFunc("/v1/isolated/stop", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSONStatus(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		var request IsolatedSessionRequest
+		if !decodeRequest(w, r.Body, &request) {
+			return
+		}
+		writeJSON(w, service.StopIsolated(r.Context(), request))
+	})
+	mux.HandleFunc("/v1/isolated/cleanup", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSONStatus(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		var request IsolatedSessionRequest
+		if !decodeRequest(w, r.Body, &request) {
+			return
+		}
+		writeJSON(w, service.CleanupIsolated(r.Context(), request))
+	})
+	mux.HandleFunc("/v1/isolated/recover", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSONStatus(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		var request IsolatedRecoverRequest
+		if !decodeRequest(w, r.Body, &request) {
+			return
+		}
+		writeJSON(w, service.RecoverIsolated(r.Context(), request))
+	})
 	mux.HandleFunc("/v1/diagnostics", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeJSONStatus(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
@@ -154,10 +260,25 @@ func NewHandler(options Options) http.Handler {
 	return mux
 }
 
+func decodeRequest(w http.ResponseWriter, reader io.Reader, target any) bool {
+	if err := json.NewDecoder(io.LimitReader(reader, maxProfilePayloadBytes)).Decode(target); err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, map[string]string{"error": "decode request: " + err.Error()})
+		return false
+	}
+	return true
+}
+
 func ServeUnix(ctx context.Context, socketPath string, handler http.Handler) error {
+	return ServeUnixWithMode(ctx, socketPath, handler, DefaultSocketMode)
+}
+
+func ServeUnixWithMode(ctx context.Context, socketPath string, handler http.Handler, socketMode os.FileMode) error {
 	socketPath = strings.TrimSpace(socketPath)
 	if socketPath == "" {
 		socketPath = DefaultSocketPath
+	}
+	if socketMode == 0 {
+		socketMode = DefaultSocketMode
 	}
 	if handler == nil {
 		return fmt.Errorf("daemon handler is required")
@@ -176,11 +297,17 @@ func ServeUnix(ctx context.Context, socketPath string, handler http.Handler) err
 		_ = listener.Close()
 		_ = os.Remove(socketPath)
 	}()
-	_ = os.Chmod(socketPath, 0o600)
+	_ = os.Chmod(socketPath, socketMode)
 
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
+			if credentials, ok := connPeerCredentials(conn); ok {
+				return context.WithValue(ctx, peerCredentialsContextKey{}, credentials)
+			}
+			return ctx
+		},
 	}
 	errCh := make(chan error, 1)
 	go func() {

@@ -172,11 +172,22 @@ Current implementation slice:
 - `big-red-buttond` listens on the Unix socket.
 - `/v1/health`, `/v1/profile/validate`, `/v1/plan/connect`, `/v1/status` and
   `/v1/diagnostics` are read-only JSON endpoints.
+- `/v1/connect`, `/v1/disconnect`, `/v1/isolated/start`,
+  `/v1/isolated/stop`, `/v1/isolated/cleanup` and `/v1/isolated/recover`
+  expose high-level mutating Linux lifecycle actions.
 - The Arch Linux package installs `big-red-buttond.service` as the systemd
   entrypoint for this helper.
 - `big-red-button daemon-status` can query the daemon over the same socket for
   smoke testing and scripted diagnostics.
-- Mutating operations still use the guarded CLI path through `pkexec`.
+- The desktop GUI tries the daemon API first and falls back to the guarded CLI
+  path through `pkexec` if the daemon socket is unavailable.
+- The Linux daemon records Unix socket peer credentials. Isolated app start
+  uses the caller UID/GID when no explicit launch identity is provided, so the
+  selected app does not run as root when the daemon is root-owned.
+- In the alpha implementation, mutating daemon endpoints reuse the existing
+  CLI lifecycle backend internally; they do not expose arbitrary command
+  execution over IPC. A direct in-daemon lifecycle backend is the next hardening
+  step.
 
 Initial API:
 

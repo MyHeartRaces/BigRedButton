@@ -68,10 +68,88 @@ func (c *Client) PlanConnect(ctx context.Context, payload []byte, options planne
 	return response, nil
 }
 
+func (c *Client) Connect(ctx context.Context, payload []byte, options planner.Options) (OperationResponse, error) {
+	request, err := json.Marshal(ConnectRequest{
+		Profile: append([]byte(nil), payload...),
+		Options: options,
+	})
+	if err != nil {
+		return OperationResponse{}, err
+	}
+	var response OperationResponse
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/connect", request, &response); err != nil {
+		return OperationResponse{}, err
+	}
+	return response, nil
+}
+
+func (c *Client) Disconnect(ctx context.Context, options planner.Options) (OperationResponse, error) {
+	request, err := json.Marshal(DisconnectRequest{Options: options})
+	if err != nil {
+		return OperationResponse{}, err
+	}
+	var response OperationResponse
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/disconnect", request, &response); err != nil {
+		return OperationResponse{}, err
+	}
+	return response, nil
+}
+
+func (c *Client) StartIsolated(ctx context.Context, payload []byte, options planner.IsolatedAppOptions, cleanupOnExit *bool) (OperationResponse, error) {
+	request, err := json.Marshal(IsolatedStartRequest{
+		Profile:       append([]byte(nil), payload...),
+		Options:       options,
+		CleanupOnExit: cleanupOnExit,
+	})
+	if err != nil {
+		return OperationResponse{}, err
+	}
+	var response OperationResponse
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/isolated/start", request, &response); err != nil {
+		return OperationResponse{}, err
+	}
+	return response, nil
+}
+
+func (c *Client) StopIsolated(ctx context.Context, sessionID string, runtimeRoot string) (OperationResponse, error) {
+	return c.isolatedSessionOperation(ctx, "/v1/isolated/stop", sessionID, runtimeRoot)
+}
+
+func (c *Client) CleanupIsolated(ctx context.Context, sessionID string, runtimeRoot string) (OperationResponse, error) {
+	return c.isolatedSessionOperation(ctx, "/v1/isolated/cleanup", sessionID, runtimeRoot)
+}
+
+func (c *Client) RecoverIsolated(ctx context.Context, request IsolatedRecoverRequest) (OperationResponse, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return OperationResponse{}, err
+	}
+	var response OperationResponse
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/isolated/recover", payload, &response); err != nil {
+		return OperationResponse{}, err
+	}
+	return response, nil
+}
+
 func (c *Client) Diagnostics(ctx context.Context) (DiagnosticsResponse, error) {
 	var response DiagnosticsResponse
 	if err := c.getJSON(ctx, "/v1/diagnostics", &response); err != nil {
 		return DiagnosticsResponse{}, err
+	}
+	return response, nil
+}
+
+func (c *Client) isolatedSessionOperation(ctx context.Context, path string, sessionID string, runtimeRoot string) (OperationResponse, error) {
+	payload, err := json.Marshal(IsolatedSessionRequest{
+		SessionID:   sessionID,
+		RuntimeRoot: runtimeRoot,
+	})
+	if err != nil {
+		return OperationResponse{}, err
+	}
+	var response OperationResponse
+	if err := c.doJSON(ctx, http.MethodPost, path, payload, &response); err != nil {
+		return OperationResponse{}, err
 	}
 	return response, nil
 }

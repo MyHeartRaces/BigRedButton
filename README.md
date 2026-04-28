@@ -36,7 +36,8 @@ Implemented:
 - Linux isolated app exit monitor that cleans up session state after app exit
 - Linux startup recovery mode for stale isolated sessions and missing monitors
 - desktop GUI startup recovery for dirty Linux isolated sessions
-- experimental read-only local IPC daemon for status and diagnostics
+- experimental local IPC daemon for status, diagnostics and Linux lifecycle actions
+- desktop GUI daemon-first Linux lifecycle with guarded CLI fallback
 - desktop GUI launcher with system and Linux isolated app controls
 - Arch Linux application launcher package
 - macOS `.pkg` installer with an app bundle
@@ -44,8 +45,8 @@ Implemented:
 
 Not implemented yet:
 
-- full privileged daemon / IPC boundary
-- daemon-owned mutating connect/disconnect APIs
+- hardened privileged daemon / IPC boundary with final socket authorization model
+- direct in-daemon lifecycle backend without the alpha CLI backend handoff
 - Windows, macOS, or mobile ports
 
 ## Requirements
@@ -66,8 +67,10 @@ Runtime on Linux:
 - root privileges or equivalent capabilities for real connect/disconnect
 
 On Arch Linux, `iproute2`, `systemd` and `wireguard-tools` are official
-packages. The `wstunnel` helper may need to be installed separately if it is not
-available in your configured repositories.
+packages. The alpha build deliberately does not bundle `wstunnel`: use the
+repository package if one is available for your setup, install it separately, or
+set an explicit helper path in the GUI / `-wstunnel-binary`. This keeps the
+launcher package small and avoids silently shipping a stale transport binary.
 
 ## Build
 
@@ -161,9 +164,9 @@ The PKGBUILD is in `packaging/arch/PKGBUILD`.
 
 ## Experimental Daemon IPC
 
-`big-red-buttond` is an early read-only local IPC daemon. It listens on a Unix
-domain socket and exposes JSON endpoints for health, profile validation,
-connect planning, status and diagnostics:
+`big-red-buttond` is an early local IPC daemon. It listens on a Unix domain
+socket and exposes JSON endpoints for health, profile validation, connect
+planning, status, diagnostics and Linux lifecycle actions:
 
 ```bash
 sudo systemctl start big-red-buttond.service
@@ -172,8 +175,15 @@ curl --unix-socket /run/big-red-button/launcher.sock \
   http://big-red-button/v1/status
 ```
 
-Mutating connect/disconnect operations still use the guarded CLI path through
-`pkexec` in this build.
+The GUI tries the daemon API first for Linux connect/disconnect and isolated
+app lifecycle actions. If the daemon socket is unavailable, it falls back to
+the guarded CLI path through `pkexec`.
+
+The packaged systemd service uses a local desktop alpha socket mode so the GUI
+can reach the daemon without running as root. The daemon records Linux peer
+credentials on the Unix socket and uses the caller UID/GID for isolated app
+launches when the GUI does not pass them explicitly. A stricter group/ACL model
+is still required before treating this helper boundary as release-grade.
 
 ## Quick Smoke Test
 

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/MyHeartRaces/BigRedButton/internal/buildinfo"
+	"github.com/MyHeartRaces/BigRedButton/internal/daemon"
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 	"github.com/MyHeartRaces/BigRedButton/internal/profile"
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
@@ -287,7 +288,10 @@ func (a *app) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := a.runCLI(r.Context(), "connect", args)
+	response, handled := a.runDaemonConnect(r.Context(), state)
+	if !handled {
+		response = a.runCLI(r.Context(), "connect", args)
+	}
 	state.LastCommand = "connect"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
@@ -305,7 +309,10 @@ func (a *app) disconnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := a.loadState()
-	response := a.runCLI(r.Context(), "disconnect", []string{"linux-disconnect", "-yes"})
+	response, handled := a.runDaemonDisconnect(r.Context())
+	if !handled {
+		response = a.runCLI(r.Context(), "disconnect", []string{"linux-disconnect", "-yes"})
+	}
 	state.LastCommand = "disconnect"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
@@ -473,7 +480,10 @@ func (a *app) isolatedStart(w http.ResponseWriter, r *http.Request) {
 	}
 	args = append(args, state.ProfilePath, "--")
 	args = append(args, command...)
-	response := a.runCLI(r.Context(), "isolated app start", args)
+	response, handled := a.runDaemonIsolatedStart(r.Context(), state, command)
+	if !handled {
+		response = a.runCLI(r.Context(), "isolated app start", args)
+	}
 	state.LastCommand = "isolated-start"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
@@ -503,7 +513,10 @@ func (a *app) isolatedStop(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated session UUID is required"})
 		return
 	}
-	response := a.runCLI(r.Context(), "isolated app stop", []string{"linux-stop-isolated-app", "-yes", "-session-id", state.IsolatedSession})
+	response, handled := a.runDaemonIsolatedStop(r.Context(), state.IsolatedSession)
+	if !handled {
+		response = a.runCLI(r.Context(), "isolated app stop", []string{"linux-stop-isolated-app", "-yes", "-session-id", state.IsolatedSession})
+	}
 	state.LastCommand = "isolated-stop"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
@@ -534,7 +547,10 @@ func (a *app) isolatedCleanup(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated session UUID is required"})
 		return
 	}
-	response := a.runCLI(r.Context(), "isolated app cleanup", []string{"linux-cleanup-isolated-app", "-yes", "-session-id", state.IsolatedSession})
+	response, handled := a.runDaemonIsolatedCleanup(r.Context(), state.IsolatedSession)
+	if !handled {
+		response = a.runCLI(r.Context(), "isolated app cleanup", []string{"linux-cleanup-isolated-app", "-yes", "-session-id", state.IsolatedSession})
+	}
 	state.LastCommand = "isolated-cleanup"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
@@ -553,7 +569,10 @@ func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := a.loadState()
-	response := a.runCLI(r.Context(), "isolated app recovery", []string{"linux-recover-isolated-sessions", "-yes", "-startup"})
+	response, handled := a.runDaemonIsolatedRecover(r.Context())
+	if !handled {
+		response = a.runCLI(r.Context(), "isolated app recovery", []string{"linux-recover-isolated-sessions", "-yes", "-startup"})
+	}
 	state.LastCommand = "isolated-recover"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
@@ -563,22 +582,44 @@ func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) statusPayload(ctx context.Context) statusResponse {
 	state := a.loadState()
+	runtimeSnapshot := status.FromStore(ctx, truntime.Store{Root: planner.DefaultRuntimeRoot})
+	var isolatedSessions []status.IsolatedSessionSnapshot
+	var statusError string
+	privilegeHelper := linuxPrivilegeHelperStatus()
+	if desktopGOOS == "linux" {
+		if daemonStatus, err := daemon.NewClient("").Status(ctx); err == nil {
+			runtimeSnapshot = daemonStatus.Runtime
+			isolatedSessions = daemonStatus.IsolatedSessions
+			statusError = daemonStatus.Error
+			privilegeHelper = "daemon: connected"
+		} else {
+			privilegeHelper = "daemon unavailable; fallback " + privilegeHelper
+		}
+	}
 	response := statusResponse{
-		Version:         buildinfo.Current(),
-		OS:              desktopGOOS,
-		CLIPath:         a.cliPath,
-		PrivilegeHelper: linuxPrivilegeHelperStatus(),
-		GUI:             state,
-		Runtime:         status.FromStore(ctx, truntime.Store{Root: planner.DefaultRuntimeRoot}),
+		Version:          buildinfo.Current(),
+		OS:               desktopGOOS,
+		CLIPath:          a.cliPath,
+		PrivilegeHelper:  privilegeHelper,
+		GUI:              state,
+		Runtime:          runtimeSnapshot,
+		IsolatedSessions: isolatedSessions,
+		Error:            statusError,
 	}
-	if strings.TrimSpace(state.IsolatedSession) != "" {
-		isolated := status.FromStore(ctx, truntime.Store{Root: filepath.Join(planner.DefaultRuntimeRoot, planner.DefaultIsolatedRuntimeSubdir, state.IsolatedSession)})
-		response.Isolated = &isolated
+	if response.IsolatedSessions == nil {
+		if sessions, err := status.IsolatedSessions(ctx, planner.DefaultRuntimeRoot); err == nil {
+			response.IsolatedSessions = sessions
+		} else {
+			response.Error = "list isolated sessions: " + err.Error()
+		}
 	}
-	if sessions, err := status.IsolatedSessions(ctx, planner.DefaultRuntimeRoot); err == nil {
-		response.IsolatedSessions = sessions
-	} else {
-		response.Error = "list isolated sessions: " + err.Error()
+	if sessionID := strings.TrimSpace(state.IsolatedSession); sessionID != "" {
+		if isolated, ok := isolatedSnapshotByID(response.IsolatedSessions, sessionID); ok {
+			response.Isolated = &isolated
+		} else {
+			isolated := status.FromStore(ctx, truntime.Store{Root: filepath.Join(planner.DefaultRuntimeRoot, planner.DefaultIsolatedRuntimeSubdir, sessionID)})
+			response.Isolated = &isolated
+		}
 	}
 	if strings.TrimSpace(state.ProfilePath) == "" {
 		return response
@@ -600,6 +641,62 @@ func (a *app) runCLI(ctx context.Context, action string, args []string) actionRe
 
 func (a *app) runCLIUnprivileged(ctx context.Context, action string, args []string) actionResponse {
 	return a.runCLICommand(ctx, action, args, false)
+}
+
+func (a *app) runDaemonConnect(ctx context.Context, state guiState) (actionResponse, bool) {
+	payload, err := os.ReadFile(strings.TrimSpace(state.ProfilePath))
+	if err != nil {
+		return actionResponse{OK: false, Output: err.Error(), Error: "connect failed"}, true
+	}
+	response, err := daemon.NewClient("").Connect(ctx, payload, planner.Options{
+		EndpointIPs:    csvGUIOption(state.EndpointIP),
+		WSTunnelBinary: strings.TrimSpace(state.WSTunnelBinary),
+	})
+	return a.daemonAction("connect", response, err)
+}
+
+func (a *app) runDaemonDisconnect(ctx context.Context) (actionResponse, bool) {
+	response, err := daemon.NewClient("").Disconnect(ctx, planner.Options{})
+	return a.daemonAction("disconnect", response, err)
+}
+
+func (a *app) runDaemonIsolatedStart(ctx context.Context, state guiState, command []string) (actionResponse, bool) {
+	payload, err := os.ReadFile(strings.TrimSpace(state.ProfilePath))
+	if err != nil {
+		return actionResponse{OK: false, Output: err.Error(), Error: "isolated app start failed"}, true
+	}
+	response, err := daemon.NewClient("").StartIsolated(ctx, payload, planner.IsolatedAppOptions{
+		SessionID:      strings.TrimSpace(state.IsolatedSession),
+		AppCommand:     append([]string(nil), command...),
+		WSTunnelBinary: strings.TrimSpace(state.WSTunnelBinary),
+		LaunchUID:      strconv.Itoa(os.Getuid()),
+		LaunchGID:      strconv.Itoa(os.Getgid()),
+		LaunchEnv:      desktopLaunchEnv(),
+	}, nil)
+	return a.daemonAction("isolated app start", response, err)
+}
+
+func (a *app) runDaemonIsolatedStop(ctx context.Context, sessionID string) (actionResponse, bool) {
+	response, err := daemon.NewClient("").StopIsolated(ctx, sessionID, "")
+	return a.daemonAction("isolated app stop", response, err)
+}
+
+func (a *app) runDaemonIsolatedCleanup(ctx context.Context, sessionID string) (actionResponse, bool) {
+	response, err := daemon.NewClient("").CleanupIsolated(ctx, sessionID, "")
+	return a.daemonAction("isolated app cleanup", response, err)
+}
+
+func (a *app) runDaemonIsolatedRecover(ctx context.Context) (actionResponse, bool) {
+	response, err := daemon.NewClient("").RecoverIsolated(ctx, daemon.IsolatedRecoverRequest{Startup: true})
+	return a.daemonAction("isolated app recovery", response, err)
+}
+
+func (a *app) daemonAction(action string, response daemon.OperationResponse, err error) (actionResponse, bool) {
+	if err != nil {
+		a.logger.Printf("%s daemon fallback: %v", action, err)
+		return actionResponse{}, false
+	}
+	return daemonActionResponse(response, action), true
 }
 
 func (a *app) runCLICommand(ctx context.Context, action string, args []string, privileged bool) actionResponse {
@@ -633,6 +730,26 @@ func (a *app) runCLICommand(ctx context.Context, action string, args []string, p
 		result = action + " completed"
 	}
 	return actionResponse{OK: true, Output: result}
+}
+
+func daemonActionResponse(response daemon.OperationResponse, action string) actionResponse {
+	result := strings.TrimSpace(response.Output)
+	if result == "" {
+		result = action + " completed"
+	}
+	return actionResponse{
+		OK:     response.OK,
+		Output: result,
+		Error:  response.Error,
+	}
+}
+
+func csvGUIOption(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return []string{value}
 }
 
 func withLinuxPrivilegeHelper(command []string) ([]string, error) {
@@ -804,6 +921,15 @@ func isolatedSessionsNeedStartupRecovery(sessions []status.IsolatedSessionSnapsh
 		}
 	}
 	return false
+}
+
+func isolatedSnapshotByID(sessions []status.IsolatedSessionSnapshot, sessionID string) (status.Snapshot, bool) {
+	for _, session := range sessions {
+		if session.SessionID == sessionID {
+			return session.Snapshot, true
+		}
+	}
+	return status.Snapshot{}, false
 }
 
 func desktopLaunchEnv() []string {

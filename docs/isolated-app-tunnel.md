@@ -252,7 +252,8 @@ The repository currently includes the first Linux implementation slice:
   dirty instead of connected.
 
 This is still early helper-level functionality. The GUI can start, stop and
-best-effort clean up a Linux isolated session through the CLI, and normal app
-exit now triggers monitor-driven cleanup. Startup recovery can restore missing
-monitors or clean stale sessions, but the final privileged daemon/IPC boundary
-is not complete.
+best-effort clean up a Linux isolated session through the daemon API when the
+daemon socket is available, and it falls back to the guarded CLI path otherwise.
+Normal app exit triggers monitor-driven cleanup. Startup recovery can restore
+missing monitors or clean stale sessions, but the final hardened daemon/IPC
+authorization model is not complete.

@@ -192,6 +192,18 @@ func TestIsolatedSessionsNeedStartupRecovery(t *testing.T) {
 	}
 }
 
+func TestIsolatedSnapshotByID(t *testing.T) {
+	snapshot, ok := isolatedSnapshotByID([]status.IsolatedSessionSnapshot{
+		{SessionID: "a", Snapshot: status.Snapshot{State: status.StateConnected}},
+	}, "a")
+	if !ok || snapshot.State != status.StateConnected {
+		t.Fatalf("snapshot=%#v ok=%t", snapshot, ok)
+	}
+	if _, ok := isolatedSnapshotByID(nil, "missing"); ok {
+		t.Fatal("unexpected missing snapshot")
+	}
+}
+
 func TestNewUUIDShape(t *testing.T) {
 	value, err := newUUID()
 	if err != nil {
