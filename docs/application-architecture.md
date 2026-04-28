@@ -167,6 +167,13 @@ Linux MVP IPC:
 - request/response protocol in JSON for early development
 - versioned message envelope
 
+Current implementation slice:
+
+- `big-red-buttond` listens on the Unix socket.
+- `/v1/health`, `/v1/status` and `/v1/diagnostics` are read-only JSON
+  endpoints.
+- Mutating operations still use the guarded CLI path through `pkexec`.
+
 Initial API:
 
 - `ValidateProfile`

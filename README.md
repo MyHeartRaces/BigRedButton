@@ -36,6 +36,7 @@ Implemented:
 - Linux isolated app exit monitor that cleans up session state after app exit
 - Linux startup recovery mode for stale isolated sessions and missing monitors
 - desktop GUI startup recovery for dirty Linux isolated sessions
+- experimental read-only local IPC daemon for status and diagnostics
 - desktop GUI launcher with system and Linux isolated app controls
 - Arch Linux application launcher package
 - macOS `.pkg` installer with an app bundle
@@ -43,7 +44,8 @@ Implemented:
 
 Not implemented yet:
 
-- privileged daemon / IPC boundary
+- full privileged daemon / IPC boundary
+- daemon-owned mutating connect/disconnect APIs
 - Windows, macOS, or mobile ports
 
 ## Requirements
@@ -146,6 +148,7 @@ The package installs:
 
 - `/usr/bin/big-red-button`
 - `/usr/bin/big-red-button-gui`
+- `/usr/bin/big-red-buttond`
 - `/usr/share/doc/big-red-button/linux-smoke.sh`
 - `/usr/share/applications/big-red-button.desktop`
 - `/usr/share/icons/hicolor/scalable/apps/big-red-button.svg`
@@ -154,6 +157,20 @@ The package installs:
 - `/usr/share/doc/big-red-button/README.md`
 
 The PKGBUILD is in `packaging/arch/PKGBUILD`.
+
+## Experimental Daemon IPC
+
+`big-red-buttond` is an early read-only local IPC daemon. It listens on a Unix
+domain socket and exposes JSON endpoints for health, status and diagnostics:
+
+```bash
+sudo big-red-buttond
+curl --unix-socket /run/big-red-button/launcher.sock \
+  http://big-red-button/v1/status
+```
+
+Mutating connect/disconnect operations still use the guarded CLI path through
+`pkexec` in this build.
 
 ## Quick Smoke Test
 

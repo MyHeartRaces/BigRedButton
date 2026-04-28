@@ -1,5 +1,6 @@
 BINARY := big-red-button
 GUI_BINARY := big-red-button-gui
+DAEMON_BINARY := big-red-buttond
 VERSION ?= 0.2.1
 PREFIX ?= /usr/local
 GO_LDFLAGS := -s -w -X github.com/MyHeartRaces/BigRedButton/internal/buildinfo.Version=$(VERSION)
@@ -10,6 +11,7 @@ build:
 	@mkdir -p build
 	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(GO_LDFLAGS)" -o build/$(BINARY) ./cmd/$(BINARY)
 	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(GO_LDFLAGS)" -o build/$(GUI_BINARY) ./cmd/$(GUI_BINARY)
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(GO_LDFLAGS)" -o build/$(DAEMON_BINARY) ./cmd/$(DAEMON_BINARY)
 
 test:
 	go test ./...
@@ -26,6 +28,7 @@ install: build
 	install -d "$(DESTDIR)$(PREFIX)/share/polkit-1/actions"
 	install -m755 build/$(BINARY) "$(DESTDIR)$(PREFIX)/bin/$(BINARY)"
 	install -m755 build/$(GUI_BINARY) "$(DESTDIR)$(PREFIX)/bin/$(GUI_BINARY)"
+	install -m755 build/$(DAEMON_BINARY) "$(DESTDIR)$(PREFIX)/bin/$(DAEMON_BINARY)"
 	install -m644 LICENSE "$(DESTDIR)$(PREFIX)/share/licenses/$(BINARY)/LICENSE"
 	install -m644 README.md "$(DESTDIR)$(PREFIX)/share/doc/$(BINARY)/README.md"
 	install -m755 scripts/linux-smoke.sh "$(DESTDIR)$(PREFIX)/share/doc/$(BINARY)/linux-smoke.sh"
