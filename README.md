@@ -247,6 +247,12 @@ sudo big-red-button linux-cleanup-isolated-app \
   -session-id 123e4567-e89b-12d3-a456-426614174000
 ```
 
+To recover all dirty isolated sessions discovered under the runtime root:
+
+```bash
+sudo big-red-button linux-recover-isolated-sessions -yes
+```
+
 Status:
 
 ```bash

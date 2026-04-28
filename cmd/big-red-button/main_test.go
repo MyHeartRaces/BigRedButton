@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
+	"github.com/MyHeartRaces/BigRedButton/internal/status"
 )
 
 func TestValidateProfileCommand(t *testing.T) {
@@ -518,6 +519,33 @@ func TestLinuxCleanupIsolatedAppRequiresConfirmation(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "requires -yes") {
 		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}
+
+func TestLinuxRecoverIsolatedSessionsRequiresConfirmation(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{"linux-recover-isolated-sessions"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "requires -yes") {
+		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}
+
+func TestIsolatedRecoveryTargets(t *testing.T) {
+	sessions := []status.IsolatedSessionSnapshot{
+		{SessionID: "dirty", Snapshot: status.Snapshot{State: status.StateDirty}},
+		{SessionID: "connected", Snapshot: status.Snapshot{State: status.StateConnected}},
+	}
+	targets, skipped := isolatedRecoveryTargets(sessions, false)
+	if strings.Join(targets, ",") != "dirty" || strings.Join(skipped, ",") != "connected" {
+		t.Fatalf("targets=%#v skipped=%#v", targets, skipped)
+	}
+	targets, skipped = isolatedRecoveryTargets(sessions, true)
+	if strings.Join(targets, ",") != "dirty,connected" || len(skipped) != 0 {
+		t.Fatalf("all targets=%#v skipped=%#v", targets, skipped)
 	}
 }
 

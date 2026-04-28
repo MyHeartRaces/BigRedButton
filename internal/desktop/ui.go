@@ -297,6 +297,7 @@ const indexHTML = `<!doctype html>
           <button class="primary" id="isolated-start" type="button">Start App</button>
           <button id="isolated-stop" type="button">Stop App</button>
           <button class="danger" id="isolated-cleanup" type="button">Cleanup</button>
+          <button class="danger" id="isolated-recover" type="button">Recover Dirty</button>
         </div>
       </section>
 
@@ -326,6 +327,7 @@ const indexHTML = `<!doctype html>
     const isolatedStartButton = document.getElementById('isolated-start');
     const isolatedStopButton = document.getElementById('isolated-stop');
     const isolatedCleanupButton = document.getElementById('isolated-cleanup');
+    const isolatedRecoverButton = document.getElementById('isolated-recover');
 
     function escapeHTML(value) {
       return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -349,6 +351,7 @@ const indexHTML = `<!doctype html>
       isolatedStartButton.disabled = busy;
       isolatedStopButton.disabled = busy;
       isolatedCleanupButton.disabled = busy;
+      isolatedRecoverButton.disabled = busy;
     }
 
     async function refresh() {
@@ -451,6 +454,7 @@ const indexHTML = `<!doctype html>
     isolatedStartButton.addEventListener('click', () => action('/api/isolated/start'));
     isolatedStopButton.addEventListener('click', () => action('/api/isolated/stop'));
     isolatedCleanupButton.addEventListener('click', () => action('/api/isolated/cleanup'));
+    isolatedRecoverButton.addEventListener('click', () => action('/api/isolated/recover'));
     document.getElementById('refresh').addEventListener('click', refresh);
     refresh().catch(error => { outputEl.textContent = error.message; });
   </script>

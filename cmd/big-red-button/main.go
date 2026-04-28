@@ -66,6 +66,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return linuxStopIsolatedApp(args[1:], stdout, stderr)
 	case "linux-cleanup-isolated-app":
 		return linuxCleanupIsolatedApp(args[1:], stdout, stderr)
+	case "linux-recover-isolated-sessions":
+		return linuxRecoverIsolatedSessions(args[1:], stdout, stderr)
 	case "linux-disconnect":
 		return linuxDisconnect(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
@@ -484,7 +486,7 @@ func linuxDryRunDisconnect(args []string, stdout io.Writer, stderr io.Writer) in
 		printPlan(plan, false, stdout)
 		printLinuxDryRun(output, stdout)
 	}
-	if result.State != engine.StateIdle {
+	if output.Result.State != engine.StateIdle {
 		return 1
 	}
 	return 0
@@ -676,7 +678,7 @@ func linuxStopIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int
 		printPlan(plan, false, stdout)
 		printLinuxIsolated(output, stdout)
 	}
-	if result.State != engine.StateIdle {
+	if output.Result.State != engine.StateIdle {
 		return 1
 	}
 	return 0
@@ -712,19 +714,10 @@ func linuxCleanupIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) 
 		fmt.Fprintf(stderr, "build isolated cleanup plan: %v\n", err)
 		return 1
 	}
-	executor, err := platformlinux.NewIsolatedExecutor(platformlinux.IsolatedExecutorOptions{
-		Plan:        plan,
-		RuntimeRoot: plan.RuntimeRoot,
-	})
+	output, err := runLinuxIsolatedPlan(plan)
 	if err != nil {
-		fmt.Fprintf(stderr, "build linux isolated cleanup executor: %v\n", err)
+		fmt.Fprintf(stderr, "run linux isolated cleanup: %v\n", err)
 		return 1
-	}
-	result := engine.New(executor).Run(context.Background(), plan)
-	output := linuxIsolatedOutput{
-		Plan:       plan,
-		Result:     result,
-		Operations: executor.Operations(),
 	}
 	if *jsonOutput {
 		writeJSON(stdout, output)
@@ -732,10 +725,76 @@ func linuxCleanupIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) 
 		printPlan(plan, false, stdout)
 		printLinuxIsolated(output, stdout)
 	}
-	if result.State != engine.StateIdle {
+	if output.Result.State != engine.StateIdle {
 		return 1
 	}
 	return 0
+}
+
+func linuxRecoverIsolatedSessions(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-recover-isolated-sessions", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	confirmed := fs.Bool("yes", false, "confirm this command may remove launcher-owned Linux namespace/firewall/runtime state")
+	includeAll := fs.Bool("all", false, "recover all known isolated sessions, including sessions that still look connected")
+	runtimeRoot := fs.String("runtime-root", planner.DefaultRuntimeRoot, "launcher runtime state root")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button linux-recover-isolated-sessions -yes [-json] [-all] [-runtime-root path]")
+		return 2
+	}
+	if !*confirmed {
+		fmt.Fprintln(stderr, "linux-recover-isolated-sessions requires -yes because it removes launcher-owned Linux namespace/firewall/runtime state")
+		return 2
+	}
+	if currentGOOS != "linux" {
+		fmt.Fprintf(stderr, "linux-recover-isolated-sessions can only run on Linux; current OS is %s\n", currentGOOS)
+		return 1
+	}
+
+	sessions, err := status.IsolatedSessions(context.Background(), *runtimeRoot)
+	if err != nil {
+		fmt.Fprintf(stderr, "list isolated sessions: %v\n", err)
+		return 1
+	}
+	targets, skipped := isolatedRecoveryTargets(sessions, *includeAll)
+	output := linuxIsolatedRecoveryOutput{
+		RuntimeRoot: *runtimeRoot,
+		All:         *includeAll,
+		Targets:     targets,
+		Skipped:     skipped,
+	}
+	code := 0
+	for _, sessionID := range targets {
+		plan, err := planner.IsolatedAppCleanup(planner.IsolatedAppStopOptions{
+			SessionID:   sessionID,
+			RuntimeRoot: *runtimeRoot,
+		})
+		if err != nil {
+			fmt.Fprintf(stderr, "build isolated cleanup plan for %s: %v\n", sessionID, err)
+			code = 1
+			continue
+		}
+		sessionOutput, err := runLinuxIsolatedPlan(plan)
+		if err != nil {
+			fmt.Fprintf(stderr, "run isolated cleanup for %s: %v\n", sessionID, err)
+			code = 1
+			continue
+		}
+		if sessionOutput.Result.State != engine.StateIdle {
+			code = 1
+		}
+		output.Sessions = append(output.Sessions, sessionOutput)
+	}
+
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printLinuxIsolatedRecovery(output, stdout)
+	}
+	return code
 }
 
 func linuxDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -886,6 +945,14 @@ type linuxIsolatedOutput struct {
 	Plan       planner.Plan              `json:"plan"`
 	Result     engine.Result             `json:"result"`
 	Operations []platformlinux.Operation `json:"operations,omitempty"`
+}
+
+type linuxIsolatedRecoveryOutput struct {
+	RuntimeRoot string                `json:"runtime_root"`
+	All         bool                  `json:"all"`
+	Targets     []string              `json:"targets"`
+	Sessions    []linuxIsolatedOutput `json:"sessions,omitempty"`
+	Skipped     []string              `json:"skipped,omitempty"`
 }
 
 type stringListFlag []string
@@ -1135,6 +1202,27 @@ func printLinuxIsolated(output linuxIsolatedOutput, stdout io.Writer) {
 	printLinuxOperations(stdout, "isolated operations", output.Operations)
 }
 
+func printLinuxIsolatedRecovery(output linuxIsolatedRecoveryOutput, stdout io.Writer) {
+	fmt.Fprintf(stdout, "isolated recovery root: %s\n", output.RuntimeRoot)
+	if output.All {
+		fmt.Fprintln(stdout, "mode: all known sessions")
+	} else {
+		fmt.Fprintln(stdout, "mode: dirty sessions only")
+	}
+	if len(output.Targets) == 0 {
+		fmt.Fprintln(stdout, "targets: []")
+	} else {
+		fmt.Fprintf(stdout, "targets: %v\n", output.Targets)
+	}
+	if len(output.Skipped) > 0 {
+		fmt.Fprintf(stdout, "skipped: %v\n", output.Skipped)
+	}
+	for _, session := range output.Sessions {
+		fmt.Fprintf(stdout, "\nsession: %s\n", session.Plan.SessionID)
+		printLinuxIsolated(session, stdout)
+	}
+}
+
 func printStatusSnapshot(stdout io.Writer, snapshot status.Snapshot) {
 	fmt.Fprintf(stdout, "state: %s\n", snapshot.State)
 	fmt.Fprintf(stdout, "runtime root: %s\n", snapshot.RuntimeRoot)
@@ -1217,6 +1305,38 @@ func shellQuote(value string) string {
 	return value
 }
 
+func isolatedRecoveryTargets(sessions []status.IsolatedSessionSnapshot, includeAll bool) ([]string, []string) {
+	var targets []string
+	var skipped []string
+	for _, session := range sessions {
+		switch {
+		case includeAll:
+			targets = append(targets, session.SessionID)
+		case session.Snapshot.State == status.StateDirty:
+			targets = append(targets, session.SessionID)
+		default:
+			skipped = append(skipped, session.SessionID)
+		}
+	}
+	return targets, skipped
+}
+
+func runLinuxIsolatedPlan(plan planner.Plan) (linuxIsolatedOutput, error) {
+	executor, err := platformlinux.NewIsolatedExecutor(platformlinux.IsolatedExecutorOptions{
+		Plan:        plan,
+		RuntimeRoot: plan.RuntimeRoot,
+	})
+	if err != nil {
+		return linuxIsolatedOutput{}, fmt.Errorf("build linux isolated executor: %w", err)
+	}
+	result := engine.New(executor).Run(context.Background(), plan)
+	return linuxIsolatedOutput{
+		Plan:       plan,
+		Result:     result,
+		Operations: executor.Operations(),
+	}, nil
+}
+
 func printLinuxOperations(stdout io.Writer, title string, operations []platformlinux.Operation) {
 	if len(operations) == 0 {
 		return
@@ -1277,5 +1397,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  linux-isolated-app -yes [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-stop-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-cleanup-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
+	fmt.Fprintln(w, "  linux-recover-isolated-sessions -yes [-json] [-all] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-disconnect -yes [-json] [-runtime-root path] <profile.json>")
 }

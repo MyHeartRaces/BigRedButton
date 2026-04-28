@@ -231,6 +231,9 @@ The repository currently includes the first Linux implementation slice:
   deterministic launcher-owned namespace, veth and WireGuard names derived from
   that UUID, ignores already-missing objects, removes namespace DNS and clears
   the session runtime root.
+- `linux-recover-isolated-sessions -yes` scans known isolated runtime sessions
+  and runs best-effort cleanup for dirty sessions only. `-all` can be used for
+  explicit recovery of every known session.
 - `isolated-sessions` lists every runtime session directory under the isolated
   runtime root, including dirty entries whose `state.json` cannot be loaded,
   so the GUI and CLI can surface recovery targets after a crash.

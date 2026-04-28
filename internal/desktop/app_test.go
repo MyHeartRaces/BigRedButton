@@ -63,7 +63,10 @@ func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 	for _, want := range []string{
 		`id="isolated-cleanup"`,
 		`/api/isolated/cleanup`,
+		`id="isolated-recover"`,
+		`/api/isolated/recover`,
 		`Cleanup`,
+		`Recover Dirty`,
 		`known isolated sessions`,
 	} {
 		if !strings.Contains(indexHTML, want) {

@@ -105,6 +105,7 @@ func Run(ctx context.Context, options Options) error {
 	mux.HandleFunc("/api/isolated/start", a.isolatedStart)
 	mux.HandleFunc("/api/isolated/stop", a.isolatedStop)
 	mux.HandleFunc("/api/isolated/cleanup", a.isolatedCleanup)
+	mux.HandleFunc("/api/isolated/recover", a.isolatedRecover)
 
 	addr := strings.TrimSpace(options.Addr)
 	if addr == "" {
@@ -400,6 +401,24 @@ func (a *app) isolatedCleanup(w http.ResponseWriter, r *http.Request) {
 	}
 	response := a.runCLI(r.Context(), "isolated app cleanup", []string{"linux-cleanup-isolated-app", "-yes", "-session-id", state.IsolatedSession})
 	state.LastCommand = "isolated-cleanup"
+	state.LastCommandTime = time.Now().Format(time.RFC3339)
+	state.LastOutput = response.Output
+	_ = a.saveState(state)
+	writeJSON(w, response)
+}
+
+func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if stdruntime.GOOS != "linux" {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app recovery is implemented only on Linux"})
+		return
+	}
+	state := a.loadState()
+	response := a.runCLI(r.Context(), "isolated app recovery", []string{"linux-recover-isolated-sessions", "-yes"})
+	state.LastCommand = "isolated-recover"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
 	_ = a.saveState(state)
