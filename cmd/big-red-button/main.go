@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -182,7 +183,7 @@ func planIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	if fs.NArg() < 2 {
-		fmt.Fprintln(stderr, "usage: big-red-button plan-isolated-app [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+		fmt.Fprintln(stderr, "usage: big-red-button plan-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 		return 2
 	}
 
@@ -191,7 +192,12 @@ func planIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
 		printProfileError(err, stderr, *jsonOutput, stdout)
 		return 1
 	}
-	plan, err := planner.IsolatedAppTunnel(config, isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args())))
+	isolatedOptions, err := withDefaultSessionID(isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args())))
+	if err != nil {
+		fmt.Fprintf(stderr, "generate isolated session ID: %v\n", err)
+		return 1
+	}
+	plan, err := planner.IsolatedAppTunnel(config, isolatedOptions)
 	if err != nil {
 		fmt.Fprintf(stderr, "build isolated app plan: %v\n", err)
 		return 1
@@ -452,7 +458,7 @@ func linuxDryRunIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) i
 		return 2
 	}
 	if fs.NArg() < 2 {
-		fmt.Fprintln(stderr, "usage: big-red-button linux-dry-run-isolated-app [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-dry-run-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 		return 2
 	}
 
@@ -461,7 +467,12 @@ func linuxDryRunIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) i
 		printProfileError(err, stderr, *jsonOutput, stdout)
 		return 1
 	}
-	plan, err := planner.IsolatedAppTunnel(config, isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args())))
+	isolatedOptions, err := withDefaultSessionID(isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args())))
+	if err != nil {
+		fmt.Fprintf(stderr, "generate isolated session ID: %v\n", err)
+		return 1
+	}
+	plan, err := planner.IsolatedAppTunnel(config, isolatedOptions)
 	if err != nil {
 		fmt.Fprintf(stderr, "build isolated app plan: %v\n", err)
 		return 1
@@ -673,7 +684,7 @@ func linuxIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	if fs.NArg() < 2 {
-		fmt.Fprintln(stderr, "usage: big-red-button linux-isolated-app -yes [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-isolated-app -yes [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 		return 2
 	}
 	if !*confirmed {
@@ -690,7 +701,11 @@ func linuxIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
 		printProfileError(err, stderr, *jsonOutput, stdout)
 		return 1
 	}
-	isolatedOptions := isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args()))
+	isolatedOptions, err := withDefaultSessionID(isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args())))
+	if err != nil {
+		fmt.Fprintf(stderr, "generate isolated session ID: %v\n", err)
+		return 1
+	}
 	isolatedOptions = withDefaultLaunchIdentity(isolatedOptions)
 	isolatedOptions = withDefaultDesktopEnv(isolatedOptions)
 	plan, err := planner.IsolatedAppTunnel(config, isolatedOptions)
@@ -1140,6 +1155,28 @@ func isolatedAppOptionsFromFlags(flags isolatedAppFlagValues, appCommand []strin
 	}
 }
 
+func withDefaultSessionID(options planner.IsolatedAppOptions) (planner.IsolatedAppOptions, error) {
+	if strings.TrimSpace(options.SessionID) != "" {
+		return options, nil
+	}
+	sessionID, err := randomUUID()
+	if err != nil {
+		return options, err
+	}
+	options.SessionID = sessionID
+	return options, nil
+}
+
+func randomUUID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+
 func withDefaultLaunchIdentity(options planner.IsolatedAppOptions) planner.IsolatedAppOptions {
 	if strings.TrimSpace(options.LaunchUID) != "" || strings.TrimSpace(options.LaunchGID) != "" {
 		return options
@@ -1548,7 +1585,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "commands:")
 	fmt.Fprintln(w, "  validate-profile [-json] <profile.json>")
 	fmt.Fprintln(w, "  plan-connect [-json] [-endpoint-ip ip[,ip]] <profile.json>")
-	fmt.Fprintln(w, "  plan-isolated-app [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+	fmt.Fprintln(w, "  plan-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  plan-isolated-stop [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  plan-isolated-cleanup [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  plan-disconnect [-json]")
@@ -1557,10 +1594,10 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  isolated-sessions [-json] [-runtime-root path]")
 	fmt.Fprintln(w, "  diagnostics [-json] [-runtime-root path] [-profile profile.json]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
-	fmt.Fprintln(w, "  linux-dry-run-isolated-app [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+	fmt.Fprintln(w, "  linux-dry-run-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")
-	fmt.Fprintln(w, "  linux-isolated-app -yes [-json] -session-id uuid [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+	fmt.Fprintln(w, "  linux-isolated-app -yes [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-stop-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-cleanup-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-recover-isolated-sessions -yes [-json] [-all] [-runtime-root path]")

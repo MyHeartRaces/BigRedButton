@@ -159,6 +159,28 @@ func TestPlanIsolatedAppCommand(t *testing.T) {
 	}
 }
 
+func TestPlanIsolatedAppGeneratesSessionID(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"plan-isolated-app",
+		"../../testdata/profiles/valid-wgws.json",
+		"--",
+		"/usr/bin/curl",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	sessionID := valueAfterPrefix(stdout.String(), "session: ")
+	if len(sessionID) != 36 || sessionID[14] != '4' {
+		t.Fatalf("unexpected generated session ID %q in output: %s", sessionID, stdout.String())
+	}
+	shortID := strings.ReplaceAll(sessionID, "-", "")[:8]
+	if !strings.Contains(stdout.String(), "namespace: brb-"+shortID) {
+		t.Fatalf("expected namespace from generated session ID, got: %s", stdout.String())
+	}
+}
+
 func TestPlanIsolatedStopCommand(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -717,4 +739,13 @@ func forceGOOS(value string) func() {
 	return func() {
 		currentGOOS = previous
 	}
+}
+
+func valueAfterPrefix(value string, prefix string) string {
+	for _, line := range strings.Split(value, "\n") {
+		if suffix, ok := strings.CutPrefix(line, prefix); ok {
+			return strings.TrimSpace(suffix)
+		}
+	}
+	return ""
 }

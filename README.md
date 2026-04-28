@@ -212,7 +212,6 @@ Plan only:
 
 ```bash
 big-red-button plan-isolated-app \
-  -session-id 123e4567-e89b-12d3-a456-426614174000 \
   /path/to/profile.json -- /usr/bin/curl https://example.com
 ```
 
@@ -220,7 +219,6 @@ Dry-run:
 
 ```bash
 big-red-button linux-dry-run-isolated-app \
-  -session-id 123e4567-e89b-12d3-a456-426614174000 \
   /path/to/profile.json -- /usr/bin/curl https://example.com
 ```
 
@@ -229,10 +227,12 @@ Real run:
 ```bash
 sudo big-red-button linux-isolated-app \
   -yes \
-  -session-id 123e4567-e89b-12d3-a456-426614174000 \
   -wstunnel-binary /usr/bin/wstunnel \
   /path/to/profile.json -- /usr/bin/curl https://example.com
 ```
+
+The start commands generate a session UUID when `-session-id` is omitted and
+print it in the plan/output. Use that UUID for stop, cleanup and status.
 
 When launched through `sudo` or `pkexec`, the CLI tries to infer the desktop
 user from `SUDO_UID`/`SUDO_GID` or `PKEXEC_UID` and launches the selected app
