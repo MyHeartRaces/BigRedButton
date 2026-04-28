@@ -202,7 +202,7 @@ func (a *app) profile(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "read profile: " + err.Error()})
 		return
 	}
-	config, err := profile.ParseV7(payload)
+	config, err := profile.ParseWGWS(payload)
 	if err != nil {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "profile invalid: " + err.Error()})
 		return

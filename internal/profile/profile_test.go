@@ -7,18 +7,18 @@ import (
 	"testing"
 )
 
-func TestParseV7ValidFixture(t *testing.T) {
+func TestParseWGWSValidFixture(t *testing.T) {
 	data, err := os.ReadFile("../../testdata/profiles/valid-wgws.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	config, err := ParseV7(data)
+	config, err := ParseWGWS(data)
 	if err != nil {
-		t.Fatalf("ParseV7() error = %v", err)
+		t.Fatalf("ParseWGWS() error = %v", err)
 	}
 
-	if config.Name != ExpectedName {
+	if config.Name != legacyWGWSProfileName {
 		t.Fatalf("unexpected profile name: %s", config.Name)
 	}
 	if config.WSTunnelURL != "wss://edge.example.com:443/cdn/ws" {
@@ -49,7 +49,7 @@ func TestSummaryDoesNotExposeSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config, err := ParseV7(data)
+	config, err := ParseWGWS(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestSummaryDoesNotExposeSecrets(t *testing.T) {
 }
 
 func TestFingerprintIncludesDNS(t *testing.T) {
-	config, err := ParseV7([]byte(validProfileJSON()))
+	config, err := ParseWGWS([]byte(validProfileJSON()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,13 +83,13 @@ func TestFingerprintIncludesDNS(t *testing.T) {
 	}
 }
 
-func TestParseV7RejectsPlaceholders(t *testing.T) {
+func TestParseWGWSRejectsPlaceholders(t *testing.T) {
 	data, err := os.ReadFile("../../testdata/profiles/invalid-placeholder-wgws.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = ParseV7(data)
+	_, err = ParseWGWS(data)
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -106,11 +106,32 @@ func TestParseV7RejectsPlaceholders(t *testing.T) {
 	}
 }
 
-func TestParseV7RejectsUnsafeWSTunnelURL(t *testing.T) {
+func TestParseWGWSRejectsUnsupportedProfileWithoutLegacyName(t *testing.T) {
+	raw := validProfileJSON()
+	raw = strings.Replace(raw, legacyWGWSProfileName, "unsupported-profile", 1)
+
+	_, err := ParseWGWS([]byte(raw))
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	validationErr, ok := AsValidationError(err)
+	if !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+	joined := strings.Join(validationErr.Problems, "\n")
+	if !strings.Contains(joined, "profile type is not supported") {
+		t.Fatalf("missing unsupported profile error: %s", joined)
+	}
+	if strings.Contains(joined, "V7") {
+		t.Fatalf("validation error leaked legacy profile name: %s", joined)
+	}
+}
+
+func TestParseWGWSRejectsUnsafeWSTunnelURL(t *testing.T) {
 	raw := validProfileJSON()
 	raw = strings.Replace(raw, "wss://edge.example.com:443/cdn/ws", "http://edge.example.com:80/cdn/ws?debug=1", 1)
 
-	_, err := ParseV7([]byte(raw))
+	_, err := ParseWGWS([]byte(raw))
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -130,11 +151,11 @@ func TestParseV7RejectsUnsafeWSTunnelURL(t *testing.T) {
 	}
 }
 
-func TestParseV7RejectsNonLoopbackLocalUDP(t *testing.T) {
+func TestParseWGWSRejectsNonLoopbackLocalUDP(t *testing.T) {
 	raw := validProfileJSON()
 	raw = strings.Replace(raw, `"local_udp_listen": "127.0.0.1:51820"`, `"local_udp_listen": "0.0.0.0:51820"`, 1)
 
-	_, err := ParseV7([]byte(raw))
+	_, err := ParseWGWS([]byte(raw))
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -148,12 +169,12 @@ func TestParseV7RejectsNonLoopbackLocalUDP(t *testing.T) {
 	}
 }
 
-func TestParseV7RejectsUnsafeMTUAndKeepalive(t *testing.T) {
+func TestParseWGWSRejectsUnsafeMTUAndKeepalive(t *testing.T) {
 	raw := validProfileJSON()
 	raw = strings.Replace(raw, `"mtu": 1280`, `"mtu": 1500`, 1)
 	raw = strings.Replace(raw, `"persistent_keepalive": 25`, `"persistent_keepalive": 90`, 1)
 
-	_, err := ParseV7([]byte(raw))
+	_, err := ParseWGWS([]byte(raw))
 	if err == nil {
 		t.Fatal("expected validation error")
 	}

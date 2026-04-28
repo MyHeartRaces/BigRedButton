@@ -16,7 +16,7 @@ import (
 	"unicode"
 )
 
-const ExpectedName = "V7-WireGuard-WSTunnel-Direct"
+const legacyWGWSProfileName = "V7-WireGuard-WSTunnel-Direct"
 
 type Config struct {
 	Protocol            string   `json:"protocol"`
@@ -82,10 +82,10 @@ func LoadFile(path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	return ParseV7(data)
+	return ParseWGWS(data)
 }
 
-func ParseV7(data []byte) (Config, error) {
+func ParseWGWS(data []byte) (Config, error) {
 	var raw rawConfig
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return Config{}, fmt.Errorf("parse profile json: %w", err)
@@ -193,8 +193,8 @@ func normalize(raw rawConfig) (Config, error) {
 	}
 
 	name := strings.TrimSpace(raw.Name)
-	if name != ExpectedName {
-		addProblem("profile must be %s", ExpectedName)
+	if name != legacyWGWSProfileName {
+		addProblem("profile type is not supported")
 	}
 
 	port := 443
