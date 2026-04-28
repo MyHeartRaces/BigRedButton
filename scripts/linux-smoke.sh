@@ -7,6 +7,10 @@ endpoint_ip=""
 runtime_root="/run/big-red-button"
 bundle=""
 real_connect=0
+real_isolated=0
+skip_isolated=0
+isolated_session_id=""
+isolated_command=("/usr/bin/true")
 
 usage() {
   cat <<'USAGE'
@@ -19,10 +23,15 @@ Options:
   --runtime-root path        Runtime root. Defaults to /run/big-red-button.
   --bundle path.tar.gz       Diagnostics bundle output path.
   --real-connect             Also run privileged connect/status/disconnect.
+  --skip-isolated            Skip isolated app tunnel dry-run/preflight checks.
+  --isolated-session uuid    Session UUID for isolated app checks.
+  --isolated-command path    Isolated app command. Defaults to /usr/bin/true.
+  --isolated-arg value       Append an argument to the isolated app command.
+  --real-isolated            Also run privileged isolated app start/recovery.
   -h, --help                 Show this help.
 
-By default this script runs non-mutating validation, Linux preflight, dry-run
-planning and a redacted diagnostics bundle.
+By default this script runs non-mutating validation, Linux preflight, system
+dry-run, isolated app dry-run/preflight and a redacted diagnostics bundle.
 USAGE
 }
 
@@ -50,6 +59,26 @@ while [[ $# -gt 0 ]]; do
       ;;
     --real-connect)
       real_connect=1
+      shift
+      ;;
+    --skip-isolated)
+      skip_isolated=1
+      shift
+      ;;
+    --isolated-session)
+      isolated_session_id="${2:-}"
+      shift 2
+      ;;
+    --isolated-command)
+      isolated_command=("${2:-}")
+      shift 2
+      ;;
+    --isolated-arg)
+      isolated_command+=("${2:-}")
+      shift 2
+      ;;
+    --real-isolated)
+      real_isolated=1
       shift
       ;;
     -h|--help)
@@ -93,6 +122,23 @@ if [[ -z "${bundle}" ]]; then
   bundle="big-red-button-diagnostics-$(date -u +%Y%m%d-%H%M%S).tar.gz"
 fi
 
+generate_uuid() {
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuidgen | tr 'A-F' 'a-f'
+    return
+  fi
+  if [[ -r /proc/sys/kernel/random/uuid ]]; then
+    cat /proc/sys/kernel/random/uuid
+    return
+  fi
+  echo "unable to generate isolated session UUID" >&2
+  return 1
+}
+
+if [[ -z "${isolated_session_id}" ]]; then
+  isolated_session_id="$(generate_uuid)"
+fi
+
 profile_args=("${profile}")
 common_args=("-runtime-root" "${runtime_root}")
 connect_args=("-runtime-root" "${runtime_root}")
@@ -100,6 +146,8 @@ preflight_args=("-discover-routes" "-require-pkexec")
 dry_run_args=()
 diagnostics_args=("-runtime-root" "${runtime_root}")
 bundle_args=("-runtime-root" "${runtime_root}" "-output" "${bundle}")
+isolated_args=("-runtime-root" "${runtime_root}" "-session-id" "${isolated_session_id}")
+isolated_preflight_args=("-require-pkexec" "${isolated_args[@]}")
 
 if [[ -n "${wstunnel_binary}" ]]; then
   connect_args+=("-wstunnel-binary" "${wstunnel_binary}")
@@ -107,6 +155,8 @@ if [[ -n "${wstunnel_binary}" ]]; then
   dry_run_args+=("-wstunnel-binary" "${wstunnel_binary}")
   diagnostics_args+=("-wstunnel-binary" "${wstunnel_binary}")
   bundle_args+=("-wstunnel-binary" "${wstunnel_binary}")
+  isolated_args+=("-wstunnel-binary" "${wstunnel_binary}")
+  isolated_preflight_args+=("-wstunnel-binary" "${wstunnel_binary}")
 fi
 
 if [[ -n "${endpoint_ip}" ]]; then
@@ -133,6 +183,9 @@ cleanup_real_connect() {
   if [[ "${real_connect}" -eq 1 ]]; then
     run_privileged "${BRB_CLI}" linux-disconnect -yes "${common_args[@]}" >/dev/null 2>&1 || true
   fi
+  if [[ "${real_isolated}" -eq 1 ]]; then
+    run_privileged "${BRB_CLI}" linux-cleanup-isolated-app -yes "${common_args[@]}" -session-id "${isolated_session_id}" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup_real_connect EXIT
 
@@ -140,6 +193,11 @@ run_step "${BRB_CLI}" version
 run_step "${BRB_CLI}" validate-profile "${profile_args[@]}"
 run_step "${BRB_CLI}" linux-preflight "${preflight_args[@]}" "${profile_args[@]}"
 run_step "${BRB_CLI}" linux-dry-run-connect "${dry_run_args[@]}" "${profile_args[@]}"
+if [[ "${skip_isolated}" -eq 0 ]]; then
+  run_step "${BRB_CLI}" plan-isolated-app "${isolated_args[@]}" "${profile}" -- "${isolated_command[@]}"
+  run_step "${BRB_CLI}" linux-dry-run-isolated-app "${isolated_args[@]}" "${profile}" -- "${isolated_command[@]}"
+  run_step "${BRB_CLI}" linux-preflight-isolated-app "${isolated_preflight_args[@]}" "${profile}" -- "${isolated_command[@]}"
+fi
 run_step "${BRB_CLI}" diagnostics "${diagnostics_args[@]}" -profile "${profile}"
 run_step "${BRB_CLI}" diagnostics-bundle "${bundle_args[@]}" -profile "${profile}"
 
@@ -150,6 +208,16 @@ if [[ "${real_connect}" -eq 1 ]]; then
   run_privileged "${BRB_CLI}" status "${common_args[@]}"
   run_privileged "${BRB_CLI}" linux-disconnect -yes "${common_args[@]}"
   real_connect=0
+fi
+
+if [[ "${real_isolated}" -eq 1 ]]; then
+  echo
+  echo "==> privileged isolated app start/recovery"
+  run_privileged "${BRB_CLI}" linux-isolated-app -yes "${isolated_args[@]}" "${profile}" -- "${isolated_command[@]}"
+  sleep 2
+  run_privileged "${BRB_CLI}" linux-recover-isolated-sessions -yes -startup "${common_args[@]}"
+  "${BRB_CLI}" isolated-sessions "${common_args[@]}"
+  real_isolated=0
 fi
 
 echo

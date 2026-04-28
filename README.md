@@ -192,8 +192,11 @@ Repeatable Linux smoke run:
 ```
 
 The smoke script runs validation, preflight, dry-run planning and a diagnostics
-bundle by default. Add `--real-connect` only on a test machine where changing
-networking state is acceptable.
+bundle by default, including Linux isolated app plan/dry-run/preflight using
+`/usr/bin/true` as the selected app. Use `--isolated-command` and
+`--isolated-arg` to test another command. Add `--real-connect` or
+`--real-isolated` only on a test machine where changing networking state is
+acceptable.
 
 ## Real Linux Connect
 
