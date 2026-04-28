@@ -18,12 +18,13 @@ build() {
 
   export CGO_ENABLED=0
   export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw -buildvcs=false"
+  local ldflags="-s -w -X github.com/MyHeartRaces/BigRedButton/internal/buildinfo.Version=${pkgver}"
   go build \
-    -ldflags "-s -w" \
+    -ldflags "${ldflags}" \
     -o "build/${pkgname}" \
     "./cmd/${pkgname}"
   go build \
-    -ldflags "-s -w" \
+    -ldflags "${ldflags}" \
     -o "build/${pkgname}-gui" \
     "./cmd/${pkgname}-gui"
 }

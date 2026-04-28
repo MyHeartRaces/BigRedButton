@@ -2,13 +2,14 @@ BINARY := big-red-button
 GUI_BINARY := big-red-button-gui
 VERSION ?= 0.2.1
 PREFIX ?= /usr/local
+GO_LDFLAGS := -s -w -X github.com/MyHeartRaces/BigRedButton/internal/buildinfo.Version=$(VERSION)
 
 .PHONY: build test vet install clean arch-package macos-package
 
 build:
 	@mkdir -p build
-	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w" -o build/$(BINARY) ./cmd/$(BINARY)
-	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w" -o build/$(GUI_BINARY) ./cmd/$(GUI_BINARY)
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(GO_LDFLAGS)" -o build/$(BINARY) ./cmd/$(BINARY)
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(GO_LDFLAGS)" -o build/$(GUI_BINARY) ./cmd/$(GUI_BINARY)
 
 test:
 	go test ./...

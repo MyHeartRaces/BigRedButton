@@ -40,8 +40,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "dist/windows-arm64" | Out-Null
           $env:CGO_ENABLED = "0"
-          go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/windows-arm64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
-          go build -trimpath -buildvcs=false -ldflags "-s -w -H windowsgui" -o "dist/windows-arm64/${{ env.GUI_BINARY_NAME }}.exe" "./cmd/${{ env.GUI_BINARY_NAME }}"
+          $ldflags = "-s -w -X github.com/MyHeartRaces/BigRedButton/internal/buildinfo.Version=${{ env.VERSION }}"
+          go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "dist/windows-arm64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+          go build -trimpath -buildvcs=false -ldflags "$ldflags -H windowsgui" -o "dist/windows-arm64/${{ env.GUI_BINARY_NAME }}.exe" "./cmd/${{ env.GUI_BINARY_NAME }}"
 
       - name: Package
         shell: pwsh
@@ -83,8 +84,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "dist/windows-amd64" | Out-Null
           $env:CGO_ENABLED = "0"
-          go build -trimpath -buildvcs=false -ldflags "-s -w" -o "dist/windows-amd64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
-          go build -trimpath -buildvcs=false -ldflags "-s -w -H windowsgui" -o "dist/windows-amd64/${{ env.GUI_BINARY_NAME }}.exe" "./cmd/${{ env.GUI_BINARY_NAME }}"
+          $ldflags = "-s -w -X github.com/MyHeartRaces/BigRedButton/internal/buildinfo.Version=${{ env.VERSION }}"
+          go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "dist/windows-amd64/${{ env.BINARY_NAME }}.exe" "./cmd/${{ env.BINARY_NAME }}"
+          go build -trimpath -buildvcs=false -ldflags "$ldflags -H windowsgui" -o "dist/windows-amd64/${{ env.GUI_BINARY_NAME }}.exe" "./cmd/${{ env.GUI_BINARY_NAME }}"
 
       - name: Package
         shell: pwsh
@@ -142,6 +144,7 @@ jobs:
       - name: Build package in Arch Linux
         run: |
           docker run --rm \
+            -e VERSION="${VERSION}" \
             -v "$PWD:/workspace" \
             -w /workspace \
             archlinux:base-devel \
@@ -154,7 +157,7 @@ jobs:
               mkdir -p /workspace/dist
               chown -R builder:builder /workspace/dist /home/builder
               chmod -R a+rX /workspace
-              runuser -u builder -- bash -lc "cd /workspace && git config --global --add safe.directory /workspace && go test ./... && ./scripts/build-arch-package.sh"
+              runuser -u builder -- bash -lc "cd /workspace && git config --global --add safe.directory /workspace && go test ./... && PKGVER=${VERSION} ./scripts/build-arch-package.sh"
               chmod -R a+rX /workspace/dist
             '
 

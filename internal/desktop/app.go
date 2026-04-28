@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MyHeartRaces/BigRedButton/internal/buildinfo"
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 	"github.com/MyHeartRaces/BigRedButton/internal/profile"
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
@@ -37,6 +38,12 @@ type app struct {
 	logger    *log.Logger
 }
 
+var (
+	desktopGOOS     = stdruntime.GOOS
+	desktopGeteuid  = os.Geteuid
+	desktopLookPath = exec.LookPath
+)
+
 type guiState struct {
 	ProfilePath     string `json:"profile_path,omitempty"`
 	EndpointIP      string `json:"endpoint_ip,omitempty"`
@@ -49,6 +56,7 @@ type guiState struct {
 }
 
 type statusResponse struct {
+	Version          buildinfo.Info                   `json:"version"`
 	OS               string                           `json:"os"`
 	GUI              guiState                         `json:"gui"`
 	Runtime          status.Snapshot                  `json:"runtime"`
@@ -232,7 +240,7 @@ func (a *app) connect(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
 		return
 	}
-	if stdruntime.GOOS != "linux" {
+	if desktopGOOS != "linux" {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "real connect is implemented only on Linux"})
 		return
 	}
@@ -266,7 +274,7 @@ func (a *app) disconnect(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	if stdruntime.GOOS != "linux" {
+	if desktopGOOS != "linux" {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "real disconnect is implemented only on Linux"})
 		return
 	}
@@ -303,7 +311,7 @@ func (a *app) preflight(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
 		return
 	}
-	if stdruntime.GOOS != "linux" {
+	if desktopGOOS != "linux" {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "Linux preflight is implemented only on Linux"})
 		return
 	}
@@ -337,7 +345,7 @@ func (a *app) isolatedPreflight(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
 		return
 	}
-	if stdruntime.GOOS != "linux" {
+	if desktopGOOS != "linux" {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app preflight is implemented only on Linux"})
 		return
 	}
@@ -374,7 +382,7 @@ func (a *app) isolatedStart(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
 		return
 	}
-	if stdruntime.GOOS != "linux" {
+	if desktopGOOS != "linux" {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app mode is implemented only on Linux"})
 		return
 	}
@@ -437,7 +445,7 @@ func (a *app) isolatedStop(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
 		return
 	}
-	if stdruntime.GOOS != "linux" {
+	if desktopGOOS != "linux" {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app mode is implemented only on Linux"})
 		return
 	}
@@ -468,7 +476,7 @@ func (a *app) isolatedCleanup(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
 		return
 	}
-	if stdruntime.GOOS != "linux" {
+	if desktopGOOS != "linux" {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app cleanup is implemented only on Linux"})
 		return
 	}
@@ -494,7 +502,7 @@ func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	if stdruntime.GOOS != "linux" {
+	if desktopGOOS != "linux" {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app recovery is implemented only on Linux"})
 		return
 	}
@@ -510,7 +518,8 @@ func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
 func (a *app) statusPayload(ctx context.Context) statusResponse {
 	state := a.loadState()
 	response := statusResponse{
-		OS:      stdruntime.GOOS,
+		Version: buildinfo.Current(),
+		OS:      desktopGOOS,
 		GUI:     state,
 		Runtime: status.FromStore(ctx, truntime.Store{Root: planner.DefaultRuntimeRoot}),
 	}
@@ -538,7 +547,7 @@ func (a *app) statusPayload(ctx context.Context) statusResponse {
 }
 
 func (a *app) runCLI(ctx context.Context, action string, args []string) actionResponse {
-	return a.runCLICommand(ctx, action, args, stdruntime.GOOS == "linux")
+	return a.runCLICommand(ctx, action, args, desktopGOOS == "linux")
 }
 
 func (a *app) runCLIUnprivileged(ctx context.Context, action string, args []string) actionResponse {
@@ -550,9 +559,11 @@ func (a *app) runCLICommand(ctx context.Context, action string, args []string, p
 		return actionResponse{Error: "big-red-button CLI was not found"}
 	}
 	command := append([]string{a.cliPath}, args...)
-	if privileged && stdruntime.GOOS == "linux" {
-		if pkexec, err := exec.LookPath("pkexec"); err == nil {
-			command = append([]string{pkexec}, command...)
+	if privileged && desktopGOOS == "linux" {
+		var err error
+		command, err = withLinuxPrivilegeHelper(command)
+		if err != nil {
+			return actionResponse{OK: false, Output: err.Error(), Error: action + " failed"}
 		}
 	}
 
@@ -574,6 +585,17 @@ func (a *app) runCLICommand(ctx context.Context, action string, args []string, p
 		result = action + " completed"
 	}
 	return actionResponse{OK: true, Output: result}
+}
+
+func withLinuxPrivilegeHelper(command []string) ([]string, error) {
+	if desktopGeteuid() == 0 {
+		return command, nil
+	}
+	pkexec, err := desktopLookPath("pkexec")
+	if err != nil {
+		return nil, fmt.Errorf("pkexec was not found; install polkit or run big-red-button from a root shell: %w", err)
+	}
+	return append([]string{pkexec}, command...), nil
 }
 
 func (a *app) loadState() guiState {
@@ -651,7 +673,7 @@ func buildLinuxPreflightArgs(state guiState) ([]string, error) {
 	if profilePath == "" {
 		return nil, errors.New("upload a profile first")
 	}
-	args := []string{"linux-preflight", "-discover-routes"}
+	args := []string{"linux-preflight", "-discover-routes", "-require-pkexec"}
 	if endpointIP := strings.TrimSpace(state.EndpointIP); endpointIP != "" {
 		args = append(args, "-endpoint-ip", endpointIP)
 	}
@@ -674,14 +696,14 @@ func buildLinuxIsolatedPreflightArgs(state guiState) ([]string, error) {
 	if len(command) == 0 {
 		return nil, errors.New("app command is required")
 	}
-	args := []string{"linux-preflight-isolated-app"}
+	args := []string{"linux-preflight-isolated-app", "-require-pkexec"}
 	if sessionID := strings.TrimSpace(state.IsolatedSession); sessionID != "" {
 		args = append(args, "-session-id", sessionID)
 	}
 	if wstunnelBinary := strings.TrimSpace(state.WSTunnelBinary); wstunnelBinary != "" {
 		args = append(args, "-wstunnel-binary", wstunnelBinary)
 	}
-	if stdruntime.GOOS == "linux" {
+	if desktopGOOS == "linux" {
 		args = append(args, "-app-uid", strconv.Itoa(os.Getuid()), "-app-gid", strconv.Itoa(os.Getgid()))
 	}
 	for _, env := range desktopLaunchEnv() {

@@ -17,6 +17,17 @@ import (
 	"github.com/MyHeartRaces/BigRedButton/internal/status"
 )
 
+func TestVersionCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"version"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Big Red Button 0.2.1") {
+		t.Fatalf("unexpected version output: %s", stdout.String())
+	}
+}
+
 func TestValidateProfileCommand(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -375,6 +386,7 @@ func TestDiagnosticsCommand(t *testing.T) {
 	out := stdout.String()
 	for _, want := range []string{
 		"generated at:",
+		"version: 0.2.1",
 		"system runtime:",
 		"state: Idle",
 		"profile fingerprint:",
@@ -503,6 +515,58 @@ func TestLinuxPreflightCommand(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output: %s", want, out)
 		}
+	}
+}
+
+func TestLinuxPreflightCommandRequiresPKExec(t *testing.T) {
+	defer forceGOOS("linux")()
+	defer stubCurrentEUID(1000)()
+	restoreLookPath := stubExecutableLookPath(func(binary string) (string, error) {
+		if binary == "pkexec" {
+			return "/usr/bin/pkexec", nil
+		}
+		return "/usr/bin/" + binary, nil
+	})
+	defer restoreLookPath()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"linux-preflight",
+		"-require-pkexec",
+		"-endpoint-ip", "203.0.113.10",
+		"../../testdata/profiles/valid-wgws.json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "ok privilege helper pkexec: found") {
+		t.Fatalf("expected pkexec check, got: %s", stdout.String())
+	}
+}
+
+func TestLinuxPreflightCommandFailsMissingPKExec(t *testing.T) {
+	defer forceGOOS("linux")()
+	defer stubCurrentEUID(1000)()
+	restoreLookPath := stubExecutableLookPath(func(binary string) (string, error) {
+		if binary == "pkexec" {
+			return "", fmt.Errorf("not found")
+		}
+		return "/usr/bin/" + binary, nil
+	})
+	defer restoreLookPath()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"linux-preflight",
+		"-require-pkexec",
+		"-endpoint-ip", "203.0.113.10",
+		"../../testdata/profiles/valid-wgws.json",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "failed privilege helper pkexec") {
+		t.Fatalf("expected missing pkexec failure, got: %s", stdout.String())
 	}
 }
 
@@ -965,6 +1029,14 @@ func stubExecutableLookPath(fn func(string) (string, error)) func() {
 	executableLookPath = fn
 	return func() {
 		executableLookPath = previous
+	}
+}
+
+func stubCurrentEUID(value int) func() {
+	previous := currentEUID
+	currentEUID = func() int { return value }
+	return func() {
+		currentEUID = previous
 	}
 }
 

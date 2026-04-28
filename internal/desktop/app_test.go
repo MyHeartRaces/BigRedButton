@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -96,7 +97,7 @@ func TestBuildLinuxPreflightArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := strings.Join(args, " ")
-	want := "linux-preflight -discover-routes -endpoint-ip 203.0.113.10 -wstunnel-binary /usr/bin/wstunnel /tmp/profile.json"
+	want := "linux-preflight -discover-routes -require-pkexec -endpoint-ip 203.0.113.10 -wstunnel-binary /usr/bin/wstunnel /tmp/profile.json"
 	if got != want {
 		t.Fatalf("args = %q want %q", got, want)
 	}
@@ -128,6 +129,7 @@ func TestBuildLinuxIsolatedPreflightArgs(t *testing.T) {
 	got := strings.Join(args, "\n")
 	for _, want := range []string{
 		"linux-preflight-isolated-app",
+		"-require-pkexec",
 		"-session-id\n123e4567-e89b-12d3-a456-426614174000",
 		"-wstunnel-binary\n/usr/bin/wstunnel",
 		"-app-env\nDISPLAY=:1",
@@ -167,6 +169,52 @@ func TestNewUUIDShape(t *testing.T) {
 	}
 }
 
+func TestWithLinuxPrivilegeHelperRequiresPKExecForUser(t *testing.T) {
+	defer forceDesktopRuntime("linux", 1000, func(binary string) (string, error) {
+		if binary == "pkexec" {
+			return "/usr/bin/pkexec", nil
+		}
+		return "", fmt.Errorf("not found")
+	})()
+
+	command, err := withLinuxPrivilegeHelper([]string{"/usr/bin/big-red-button", "linux-connect"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(command, " ")
+	want := "/usr/bin/pkexec /usr/bin/big-red-button linux-connect"
+	if got != want {
+		t.Fatalf("command = %q want %q", got, want)
+	}
+}
+
+func TestWithLinuxPrivilegeHelperReportsMissingPKExec(t *testing.T) {
+	defer forceDesktopRuntime("linux", 1000, func(binary string) (string, error) {
+		return "", fmt.Errorf("%s missing", binary)
+	})()
+
+	_, err := withLinuxPrivilegeHelper([]string{"/usr/bin/big-red-button", "linux-connect"})
+	if err == nil || !strings.Contains(err.Error(), "pkexec was not found") {
+		t.Fatalf("expected missing pkexec error, got %v", err)
+	}
+}
+
+func TestWithLinuxPrivilegeHelperSkipsPKExecForRoot(t *testing.T) {
+	defer forceDesktopRuntime("linux", 0, func(binary string) (string, error) {
+		return "", fmt.Errorf("%s should not be resolved", binary)
+	})()
+
+	command, err := withLinuxPrivilegeHelper([]string{"/usr/bin/big-red-button", "linux-connect"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(command, " ")
+	want := "/usr/bin/big-red-button linux-connect"
+	if got != want {
+		t.Fatalf("command = %q want %q", got, want)
+	}
+}
+
 func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 	for _, want := range []string{
 		`id="isolated-cleanup"`,
@@ -179,10 +227,25 @@ func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 		`Cleanup`,
 		`Recover Dirty`,
 		`known isolated sessions`,
+		`app version`,
 	} {
 		if !strings.Contains(indexHTML, want) {
 			t.Fatalf("missing %q in UI", want)
 		}
+	}
+}
+
+func forceDesktopRuntime(goos string, euid int, lookPath func(string) (string, error)) func() {
+	previousGOOS := desktopGOOS
+	previousEUID := desktopGeteuid
+	previousLookPath := desktopLookPath
+	desktopGOOS = goos
+	desktopGeteuid = func() int { return euid }
+	desktopLookPath = lookPath
+	return func() {
+		desktopGOOS = previousGOOS
+		desktopGeteuid = previousEUID
+		desktopLookPath = previousLookPath
 	}
 }
 

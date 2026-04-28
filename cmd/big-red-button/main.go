@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MyHeartRaces/BigRedButton/internal/buildinfo"
 	"github.com/MyHeartRaces/BigRedButton/internal/engine"
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 	platformlinux "github.com/MyHeartRaces/BigRedButton/internal/platform/linux"
@@ -28,6 +29,7 @@ import (
 )
 
 var currentGOOS = stdruntime.GOOS
+var currentEUID = os.Geteuid
 var lookupIPAddr = net.DefaultResolver.LookupIPAddr
 var executableLookPath = exec.LookPath
 var preflightCommandRunner platformlinux.CommandRunner = platformlinux.ExecRunner{}
@@ -43,6 +45,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 
 	switch args[0] {
+	case "version", "--version", "-v":
+		return printVersion(stdout)
 	case "validate-profile":
 		return validateProfile(args[1:], stdout, stderr)
 	case "plan-connect":
@@ -93,6 +97,18 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		printUsage(stderr)
 		return 2
 	}
+}
+
+func printVersion(stdout io.Writer) int {
+	info := buildinfo.Current()
+	fmt.Fprintf(stdout, "Big Red Button %s\n", buildinfo.DisplayVersion())
+	if info.Commit != "" {
+		fmt.Fprintf(stdout, "commit: %s\n", info.Commit)
+	}
+	if info.Date != "" {
+		fmt.Fprintf(stdout, "built: %s\n", info.Date)
+	}
+	return 0
 }
 
 func validateProfile(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -365,6 +381,7 @@ func printDiagnostics(args []string, stdout io.Writer, stderr io.Writer) int {
 
 	output := diagnosticsOutput{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		Version:     buildinfo.Current(),
 		OS:          currentGOOS,
 		RuntimeRoot: *runtimeRoot,
 		Runtime:     status.FromStore(context.Background(), truntime.Store{Root: *runtimeRoot}),
@@ -459,12 +476,13 @@ func linuxPreflight(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	jsonOutput := fs.Bool("json", false, "print JSON output")
 	discoverRoutes := fs.Bool("discover-routes", false, "run read-only Linux route discovery")
+	requirePKExec := fs.Bool("require-pkexec", false, "check that pkexec is available when not running as root")
 	options := planConnectFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: big-red-button linux-preflight [-json] [-discover-routes] [-endpoint-ip ip[,ip]] <profile.json>")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-preflight [-json] [-discover-routes] [-require-pkexec] [-endpoint-ip ip[,ip]] <profile.json>")
 		return 2
 	}
 	if currentGOOS != "linux" {
@@ -520,6 +538,9 @@ func linuxPreflight(args []string, stdout io.Writer, stderr io.Writer) int {
 	output.Plan = &plan
 	output.Checks = append(output.Checks, preflightCheck{Name: "plan", Status: "ok", Detail: "connect plan is buildable"})
 	output.Checks = append(output.Checks, linuxPrerequisiteChecks(plan)...)
+	if *requirePKExec {
+		output.Checks = append(output.Checks, linuxPKExecCheck())
+	}
 	if *discoverRoutes {
 		output.Checks = append(output.Checks, linuxRouteDiscoveryChecks(context.Background(), endpointIPs)...)
 	}
@@ -539,12 +560,13 @@ func linuxPreflightIsolatedApp(args []string, stdout io.Writer, stderr io.Writer
 	fs := flag.NewFlagSet("linux-preflight-isolated-app", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	jsonOutput := fs.Bool("json", false, "print JSON output")
+	requirePKExec := fs.Bool("require-pkexec", false, "check that pkexec is available when not running as root")
 	options := isolatedAppFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() < 2 {
-		fmt.Fprintln(stderr, "usage: big-red-button linux-preflight-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-preflight-isolated-app [-json] [-require-pkexec] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 		return 2
 	}
 	if currentGOOS != "linux" {
@@ -592,6 +614,9 @@ func linuxPreflightIsolatedApp(args []string, stdout io.Writer, stderr io.Writer
 	output.Plan = &plan
 	output.Checks = append(output.Checks, preflightCheck{Name: "plan", Status: "ok", Detail: "isolated app plan is buildable"})
 	output.Checks = append(output.Checks, linuxPrerequisiteChecks(plan)...)
+	if *requirePKExec {
+		output.Checks = append(output.Checks, linuxPKExecCheck())
+	}
 	output.Checks = append(output.Checks, linuxIsolatedAppExecutableCheck(plan))
 	output.Checks = append(output.Checks, linuxIsolatedRuntimeCheck(plan))
 
@@ -1286,6 +1311,7 @@ type linuxIsolatedRecoveryOutput struct {
 
 type diagnosticsOutput struct {
 	GeneratedAt      string                           `json:"generated_at"`
+	Version          buildinfo.Info                   `json:"version"`
 	OS               string                           `json:"os"`
 	RuntimeRoot      string                           `json:"runtime_root"`
 	Runtime          status.Snapshot                  `json:"runtime"`
@@ -1603,6 +1629,18 @@ func linuxPrerequisiteChecks(plan planner.Plan) []preflightCheck {
 	return checks
 }
 
+func linuxPKExecCheck() preflightCheck {
+	if currentEUID() == 0 {
+		return preflightCheck{Name: "privilege helper pkexec", Status: "ok", Detail: "running as root; pkexec is not required"}
+	}
+	check := preflightCheck{Name: "privilege helper pkexec", Status: "ok", Detail: "found"}
+	if err := platformlinux.ValidateExecutable(executableLookPath, "pkexec"); err != nil {
+		check.Status = "failed"
+		check.Detail = err.Error()
+	}
+	return check
+}
+
 func linuxIsolatedAppExecutableCheck(plan planner.Plan) preflightCheck {
 	executable := ""
 	for _, step := range plan.Steps {
@@ -1736,6 +1774,13 @@ func printLinuxIsolatedRecovery(output linuxIsolatedRecoveryOutput, stdout io.Wr
 
 func printDiagnosticsOutput(stdout io.Writer, output diagnosticsOutput) {
 	fmt.Fprintf(stdout, "generated at: %s\n", output.GeneratedAt)
+	fmt.Fprintf(stdout, "version: %s\n", output.Version.Version)
+	if output.Version.Commit != "" {
+		fmt.Fprintf(stdout, "commit: %s\n", output.Version.Commit)
+	}
+	if output.Version.Date != "" {
+		fmt.Fprintf(stdout, "built: %s\n", output.Version.Date)
+	}
 	fmt.Fprintf(stdout, "os: %s\n", output.OS)
 	fmt.Fprintf(stdout, "runtime root: %s\n", output.RuntimeRoot)
 	fmt.Fprintln(stdout, "system runtime:")
@@ -1941,6 +1986,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage: big-red-button <command> [args]")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "commands:")
+	fmt.Fprintln(w, "  version")
 	fmt.Fprintln(w, "  validate-profile [-json] <profile.json>")
 	fmt.Fprintln(w, "  plan-connect [-json] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  plan-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
@@ -1952,8 +1998,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  isolated-sessions [-json] [-runtime-root path]")
 	fmt.Fprintln(w, "  diagnostics [-json] [-runtime-root path] [-profile profile.json]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
-	fmt.Fprintln(w, "  linux-preflight [-json] [-discover-routes] [-endpoint-ip ip[,ip]] <profile.json>")
-	fmt.Fprintln(w, "  linux-preflight-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+	fmt.Fprintln(w, "  linux-preflight [-json] [-discover-routes] [-require-pkexec] [-endpoint-ip ip[,ip]] <profile.json>")
+	fmt.Fprintln(w, "  linux-preflight-isolated-app [-json] [-require-pkexec] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-dry-run-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")

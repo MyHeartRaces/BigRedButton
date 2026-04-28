@@ -8,14 +8,15 @@ bundle_id="com.myheartraces.bigredbutton"
 dist_dir="${repo_root}/dist/macos"
 app_dir="${dist_dir}/${app_name}.app"
 pkgroot="${dist_dir}/pkgroot"
+ldflags="-s -w -X github.com/MyHeartRaces/BigRedButton/internal/buildinfo.Version=${version}"
 
 rm -rf "${dist_dir}"
 mkdir -p "${app_dir}/Contents/MacOS" "${app_dir}/Contents/Resources" "${pkgroot}/Applications"
 
 (
   cd "${repo_root}"
-  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false -ldflags "-s -w" -o "${app_dir}/Contents/Resources/big-red-button" ./cmd/big-red-button
-  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false -ldflags "-s -w" -o "${app_dir}/Contents/MacOS/big-red-button-gui" ./cmd/big-red-button-gui
+  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false -ldflags "${ldflags}" -o "${app_dir}/Contents/Resources/big-red-button" ./cmd/big-red-button
+  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false -ldflags "${ldflags}" -o "${app_dir}/Contents/MacOS/big-red-button-gui" ./cmd/big-red-button-gui
 )
 
 cp "${repo_root}/packaging/assets/big-red-button.icns" "${app_dir}/Contents/Resources/big-red-button.icns"

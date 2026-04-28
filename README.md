@@ -71,11 +71,14 @@ available in your configured repositories.
 make test
 make build
 ./build/big-red-button help
+./build/big-red-button version
 ./build/big-red-button-gui -addr 127.0.0.1:0 -no-open
 ```
 
 The binaries are written to `build/big-red-button` and
-`build/big-red-button-gui`.
+`build/big-red-button-gui`. To override the embedded version, pass
+`VERSION=<version>` to `make build`, `make arch-package`, or
+`make macos-package`.
 
 ## Desktop GUI
 
@@ -84,9 +87,11 @@ browser. It can save a local VPN profile, show redacted profile details, show
 runtime status, and on Linux run guarded connect/disconnect commands through
 the CLI.
 
-On Linux the GUI uses `pkexec` when available, so desktop environments can show
-a graphical privilege prompt. The Linux package installs a polkit action for
-`/usr/bin/big-red-button` so the prompt uses the application name and icon.
+On Linux the GUI uses `pkexec` for privileged actions, so desktop environments
+can show a graphical privilege prompt. The Linux package installs a polkit
+action for `/usr/bin/big-red-button` so the prompt uses the application name
+and icon. GUI preflight checks include `pkexec` when the GUI is not running as
+root.
 On macOS and Windows the GUI starts normally, but real connect/disconnect
 remains unavailable until those platform adapters are implemented.
 
@@ -172,6 +177,7 @@ Linux preflight before a real connect:
 ```bash
 big-red-button linux-preflight \
   -discover-routes \
+  -require-pkexec \
   /path/to/profile.json
 ```
 
@@ -257,6 +263,7 @@ Preflight:
 
 ```bash
 big-red-button linux-preflight-isolated-app \
+  -require-pkexec \
   /path/to/profile.json -- /usr/bin/curl https://example.com
 ```
 
