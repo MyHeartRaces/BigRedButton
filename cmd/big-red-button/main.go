@@ -599,6 +599,7 @@ func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		Plan:                plan,
 		Result:              result,
 		RouteOperations:     executor.RouteOperations(),
+		DNSOperations:       executor.DNSOperations(),
 		WSTunnelOperations:  executor.WSTunnelOperations(),
 		WireGuardOperations: executor.WireGuardOperations(),
 	}
@@ -896,6 +897,7 @@ func linuxDisconnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		Plan:                plan,
 		Result:              result,
 		RouteOperations:     executor.RouteOperations(),
+		DNSOperations:       executor.DNSOperations(),
 		WSTunnelOperations:  executor.WSTunnelOperations(),
 		WireGuardOperations: executor.WireGuardOperations(),
 	}
@@ -985,6 +987,7 @@ type linuxLifecycleOutput struct {
 	Plan                planner.Plan                   `json:"plan"`
 	Result              engine.Result                  `json:"result"`
 	RouteOperations     []platformlinux.Operation      `json:"route_operations,omitempty"`
+	DNSOperations       []platformlinux.Operation      `json:"dns_operations,omitempty"`
 	WSTunnelOperations  []supervisor.WSTunnelOperation `json:"wstunnel_operations,omitempty"`
 	WireGuardOperations []platformlinux.Operation      `json:"wireguard_operations,omitempty"`
 }
@@ -1246,6 +1249,7 @@ func printLinuxLifecycle(output linuxLifecycleOutput, stdout io.Writer) {
 		fmt.Fprintf(stdout, "rollback error: %s\n", output.Result.RollbackError)
 	}
 	printLinuxOperations(stdout, "route operations", output.RouteOperations)
+	printLinuxOperations(stdout, "dns operations", output.DNSOperations)
 	printWSTunnelOperations(stdout, output.WSTunnelOperations)
 	printLinuxOperations(stdout, "wireguard operations", output.WireGuardOperations)
 }

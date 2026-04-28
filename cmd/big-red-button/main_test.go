@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MyHeartRaces/BigRedButton/internal/engine"
+	platformlinux "github.com/MyHeartRaces/BigRedButton/internal/platform/linux"
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
 	"github.com/MyHeartRaces/BigRedButton/internal/status"
 )
@@ -460,6 +462,22 @@ func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
 	}
 	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
 		t.Fatalf("expected runtime state to be cleared, err = %v", err)
+	}
+}
+
+func TestPrintLinuxLifecycleIncludesDNSOperations(t *testing.T) {
+	var stdout bytes.Buffer
+	command := platformlinux.Command{Name: "resolvectl", Args: []string{"revert", "tg-v7"}}
+	printLinuxLifecycle(linuxLifecycleOutput{
+		Result: engine.Result{State: engine.StateIdle},
+		DNSOperations: []platformlinux.Operation{
+			{Phase: platformlinux.OperationApply, StepID: "restore-dns", Command: &command},
+		},
+	}, &stdout)
+
+	out := stdout.String()
+	if !strings.Contains(out, "dns operations:") || !strings.Contains(out, "resolvectl revert tg-v7") {
+		t.Fatalf("expected DNS operations in output, got: %s", out)
 	}
 }
 
