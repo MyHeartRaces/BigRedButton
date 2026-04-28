@@ -409,9 +409,9 @@ func TestLinuxDryRunConnectCommand(t *testing.T) {
 		"linux dry-run commands:",
 		"ip -4 route get 203.0.113.10",
 		"ip -4 route replace 203.0.113.10/32 via 192.0.2.1 dev eth0",
-		"resolvectl dns tg-v7 1.1.1.1",
-		"resolvectl domain tg-v7 ~.",
-		"resolvectl default-route tg-v7 yes",
+		"resolvectl dns brb0 1.1.1.1",
+		"resolvectl domain brb0 ~.",
+		"resolvectl default-route brb0 yes",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output: %s", want, out)
@@ -634,7 +634,7 @@ func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
 	for _, want := range []string{
 		"engine state: Idle",
 		"load " + statePath,
-		"resolvectl revert tg-v7",
+		"resolvectl revert brb0",
 		"ip -4 route delete 203.0.113.10/32 via 192.0.2.1 dev eth0",
 		"clear " + statePath,
 	} {
@@ -649,7 +649,7 @@ func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
 
 func TestPrintLinuxLifecycleIncludesDNSOperations(t *testing.T) {
 	var stdout bytes.Buffer
-	command := platformlinux.Command{Name: "resolvectl", Args: []string{"revert", "tg-v7"}}
+	command := platformlinux.Command{Name: "resolvectl", Args: []string{"revert", "brb0"}}
 	printLinuxLifecycle(linuxLifecycleOutput{
 		Result: engine.Result{State: engine.StateIdle},
 		DNSOperations: []platformlinux.Operation{
@@ -658,7 +658,7 @@ func TestPrintLinuxLifecycleIncludesDNSOperations(t *testing.T) {
 	}, &stdout)
 
 	out := stdout.String()
-	if !strings.Contains(out, "dns operations:") || !strings.Contains(out, "resolvectl revert tg-v7") {
+	if !strings.Contains(out, "dns operations:") || !strings.Contains(out, "resolvectl revert brb0") {
 		t.Fatalf("expected DNS operations in output, got: %s", out)
 	}
 }
@@ -718,7 +718,7 @@ func TestLinuxConnectAlreadyConnectedSkipsMutation(t *testing.T) {
 	if err := (truntime.Store{Root: runtimeRoot}).Save(context.Background(), truntime.State{
 		Version:            truntime.StateVersion,
 		ProfileFingerprint: config.Fingerprint(),
-		WireGuardInterface: "tg-v7",
+		WireGuardInterface: "brb0",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -753,7 +753,7 @@ func TestLinuxConnectRejectsDifferentActiveProfile(t *testing.T) {
 	if err := (truntime.Store{Root: runtimeRoot}).Save(context.Background(), truntime.State{
 		Version:            truntime.StateVersion,
 		ProfileFingerprint: "other",
-		WireGuardInterface: "tg-v7",
+		WireGuardInterface: "brb0",
 	}); err != nil {
 		t.Fatal(err)
 	}

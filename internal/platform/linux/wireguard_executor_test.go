@@ -37,13 +37,13 @@ func TestWireGuardExecutorAppliesInterfacePeerAndRoutes(t *testing.T) {
 	}
 
 	want := [][]string{
-		{"ip", "link", "add", "dev", "tg-v7", "type", "wireguard"},
-		{"ip", "address", "add", "10.70.0.2/32", "dev", "tg-v7"},
-		{"ip", "link", "set", "mtu", "1280", "dev", "tg-v7"},
-		{"ip", "link", "set", "up", "dev", "tg-v7"},
-		{"wg", "setconf", "tg-v7", "/run/big-red-button/wg-setconf.conf"},
-		{"ip", "-4", "route", "replace", "0.0.0.0/0", "dev", "tg-v7"},
-		{"ip", "-6", "route", "replace", "::/0", "dev", "tg-v7"},
+		{"ip", "link", "add", "dev", "brb0", "type", "wireguard"},
+		{"ip", "address", "add", "10.70.0.2/32", "dev", "brb0"},
+		{"ip", "link", "set", "mtu", "1280", "dev", "brb0"},
+		{"ip", "link", "set", "up", "dev", "brb0"},
+		{"wg", "setconf", "brb0", "/run/big-red-button/wg-setconf.conf"},
+		{"ip", "-4", "route", "replace", "0.0.0.0/0", "dev", "brb0"},
+		{"ip", "-6", "route", "replace", "::/0", "dev", "brb0"},
 	}
 	if !reflect.DeepEqual(runner.argv, want) {
 		t.Fatalf("commands = %#v want %#v", runner.argv, want)
@@ -61,7 +61,7 @@ func TestWireGuardExecutorDisconnectRemovesRoutesAndInterface(t *testing.T) {
 	runner := &recordingRunner{}
 	executor, err := NewWireGuardExecutor(WireGuardExecutorOptions{
 		Config: wireguard.Config{
-			InterfaceName: "tg-v7",
+			InterfaceName: "brb0",
 			AllowedIPs:    []string{"0.0.0.0/0", "::/0"},
 		},
 		Runner: runner,
@@ -80,9 +80,9 @@ func TestWireGuardExecutorDisconnectRemovesRoutesAndInterface(t *testing.T) {
 	}
 
 	want := [][]string{
-		{"ip", "-4", "route", "delete", "0.0.0.0/0", "dev", "tg-v7"},
-		{"ip", "-6", "route", "delete", "::/0", "dev", "tg-v7"},
-		{"ip", "link", "delete", "dev", "tg-v7"},
+		{"ip", "-4", "route", "delete", "0.0.0.0/0", "dev", "brb0"},
+		{"ip", "-6", "route", "delete", "::/0", "dev", "brb0"},
+		{"ip", "link", "delete", "dev", "brb0"},
 	}
 	if !reflect.DeepEqual(runner.argv, want) {
 		t.Fatalf("commands = %#v want %#v", runner.argv, want)
@@ -91,7 +91,7 @@ func TestWireGuardExecutorDisconnectRemovesRoutesAndInterface(t *testing.T) {
 
 func TestWireGuardExecutorApplyPeerValidatesFullConfig(t *testing.T) {
 	executor, err := NewWireGuardExecutor(WireGuardExecutorOptions{
-		Config: wireguard.Config{InterfaceName: "tg-v7"},
+		Config: wireguard.Config{InterfaceName: "brb0"},
 		Runner: &recordingRunner{},
 	})
 	if err != nil {
@@ -119,7 +119,7 @@ func TestWireGuardExecutorRollbackDeletesInterface(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := [][]string{{"ip", "link", "delete", "dev", "tg-v7"}}
+	want := [][]string{{"ip", "link", "delete", "dev", "brb0"}}
 	if !reflect.DeepEqual(runner.argv, want) {
 		t.Fatalf("commands = %#v want %#v", runner.argv, want)
 	}
@@ -129,10 +129,10 @@ func TestWireGuardExecutorReturnsCommandOutputOnFailure(t *testing.T) {
 	config := wireGuardConfig(t)
 	runner := &recordingRunner{
 		errs: map[string]error{
-			"ip link add dev tg-v7 type wireguard": errors.New("exit status 2"),
+			"ip link add dev brb0 type wireguard": errors.New("exit status 2"),
 		},
 		outputs: map[string]string{
-			"ip link add dev tg-v7 type wireguard": "RTNETLINK answers: Operation not permitted",
+			"ip link add dev brb0 type wireguard": "RTNETLINK answers: Operation not permitted",
 		},
 	}
 	executor, err := NewWireGuardExecutor(WireGuardExecutorOptions{
@@ -173,7 +173,7 @@ func wireGuardConfig(t *testing.T) wireguard.Config {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return wireguard.ConfigFromProfile(config, "tg-v7")
+	return wireguard.ConfigFromProfile(config, "brb0")
 }
 
 func assertOperationsDoNotLeakWireGuardSecrets(t *testing.T, operations []Operation, config wireguard.Config) {

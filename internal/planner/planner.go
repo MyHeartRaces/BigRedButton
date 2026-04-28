@@ -11,7 +11,7 @@ import (
 
 const (
 	DefaultWSTunnelBinary     = "wstunnel"
-	DefaultWireGuardInterface = "tg-v7"
+	DefaultWireGuardInterface = "brb0"
 	DefaultRuntimeRoot        = "/run/big-red-button"
 )
 
@@ -72,7 +72,7 @@ func Connect(config profile.Config, options Options) (Plan, error) {
 	steps := []Step{
 		{
 			ID:                 "validate-profile",
-			Action:             "Validate normalized V7 profile",
+			Action:             "Validate normalized VPN profile",
 			Details:            []string{"profile validation already completed by parser", "profile=" + config.Name},
 			SecretMaterialFree: true,
 		},

@@ -32,7 +32,7 @@ func TestNewStateFromConnectPlanIsSecretFree(t *testing.T) {
 	if state.ProfileFingerprint != config.Fingerprint() {
 		t.Fatalf("fingerprint = %s", state.ProfileFingerprint)
 	}
-	if state.WireGuardInterface != "tg-v7" {
+	if state.WireGuardInterface != "brb0" {
 		t.Fatalf("interface = %s", state.WireGuardInterface)
 	}
 	if len(state.RouteExclusions) != 1 {
@@ -41,7 +41,7 @@ func TestNewStateFromConnectPlanIsSecretFree(t *testing.T) {
 	if len(state.WireGuardAllowedIPs) != 2 {
 		t.Fatalf("allowed IPs = %#v", state.WireGuardAllowedIPs)
 	}
-	if !state.DNSApplied || state.DNSInterface != "tg-v7" || len(state.DNSServers) != 1 || state.DNSServers[0] != "1.1.1.1" {
+	if !state.DNSApplied || state.DNSInterface != "brb0" || len(state.DNSServers) != 1 || state.DNSServers[0] != "1.1.1.1" {
 		t.Fatalf("DNS state = applied:%t interface:%s servers:%#v", state.DNSApplied, state.DNSInterface, state.DNSServers)
 	}
 	payload, err := json.Marshal(state)

@@ -32,9 +32,9 @@ func TestDryRunExecutorRecordsConcreteRouteCommands(t *testing.T) {
 	want := [][]string{
 		{"ip", "-4", "route", "get", "203.0.113.10"},
 		{"ip", "-4", "route", "replace", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"},
-		{"resolvectl", "dns", "tg-v7", "1.1.1.1"},
-		{"resolvectl", "domain", "tg-v7", "~."},
-		{"resolvectl", "default-route", "tg-v7", "yes"},
+		{"resolvectl", "dns", "brb0", "1.1.1.1"},
+		{"resolvectl", "domain", "brb0", "~."},
+		{"resolvectl", "default-route", "brb0", "yes"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
@@ -101,9 +101,9 @@ func TestDryRunExecutorUsesReadOnlyDiscovery(t *testing.T) {
 	want := [][]string{
 		{"ip", "-4", "route", "get", "203.0.113.10"},
 		{"ip", "-4", "route", "replace", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"},
-		{"resolvectl", "dns", "tg-v7", "1.1.1.1"},
-		{"resolvectl", "domain", "tg-v7", "~."},
-		{"resolvectl", "default-route", "tg-v7", "yes"},
+		{"resolvectl", "dns", "brb0", "1.1.1.1"},
+		{"resolvectl", "domain", "brb0", "~."},
+		{"resolvectl", "default-route", "brb0", "yes"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
@@ -115,7 +115,7 @@ func TestDryRunExecutorUsesReadOnlyDiscovery(t *testing.T) {
 	if len(state.RouteExclusions) != 1 || state.RouteExclusions[0].Gateway != "192.0.2.1" {
 		t.Fatalf("runtime state = %#v", state)
 	}
-	if !state.DNSApplied || state.DNSInterface != "tg-v7" {
+	if !state.DNSApplied || state.DNSInterface != "brb0" {
 		t.Fatalf("runtime DNS state = %#v", state)
 	}
 }
@@ -160,7 +160,7 @@ func TestDryRunExecutorRecordsDNSRollbackCommand(t *testing.T) {
 	}
 
 	got := operationArgv(executor.Operations())
-	want := [][]string{{"resolvectl", "revert", "tg-v7"}}
+	want := [][]string{{"resolvectl", "revert", "brb0"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v want %#v", got, want)
 	}
@@ -204,7 +204,7 @@ func TestDryRunExecutorPersistsRuntimeStateAndDisconnectDeletesRoutes(t *testing
 
 	got := operationArgv(disconnectExecutor.Operations())
 	want := [][]string{
-		{"resolvectl", "revert", "tg-v7"},
+		{"resolvectl", "revert", "brb0"},
 		{"ip", "-4", "route", "delete", "203.0.113.10/32", "via", "192.0.2.1", "dev", "eth0"},
 	}
 	if !reflect.DeepEqual(got, want) {

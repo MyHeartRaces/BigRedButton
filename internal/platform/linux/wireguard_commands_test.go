@@ -13,33 +13,33 @@ func TestWireGuardInterfaceCommands(t *testing.T) {
 	}{
 		{
 			name: "create",
-			fn:   func() (Command, error) { return WireGuardCreateInterfaceCommand("tg-v7") },
-			want: []string{"ip", "link", "add", "dev", "tg-v7", "type", "wireguard"},
+			fn:   func() (Command, error) { return WireGuardCreateInterfaceCommand("brb0") },
+			want: []string{"ip", "link", "add", "dev", "brb0", "type", "wireguard"},
 		},
 		{
 			name: "delete",
-			fn:   func() (Command, error) { return WireGuardDeleteInterfaceCommand("tg-v7") },
-			want: []string{"ip", "link", "delete", "dev", "tg-v7"},
+			fn:   func() (Command, error) { return WireGuardDeleteInterfaceCommand("brb0") },
+			want: []string{"ip", "link", "delete", "dev", "brb0"},
 		},
 		{
 			name: "set config",
-			fn:   func() (Command, error) { return WireGuardSetConfigCommand("tg-v7", "/run/big-red-button/wg.conf") },
-			want: []string{"wg", "setconf", "tg-v7", "/run/big-red-button/wg.conf"},
+			fn:   func() (Command, error) { return WireGuardSetConfigCommand("brb0", "/run/big-red-button/wg.conf") },
+			want: []string{"wg", "setconf", "brb0", "/run/big-red-button/wg.conf"},
 		},
 		{
 			name: "add address",
-			fn:   func() (Command, error) { return WireGuardAddAddressCommand("tg-v7", "10.70.0.2/32") },
-			want: []string{"ip", "address", "add", "10.70.0.2/32", "dev", "tg-v7"},
+			fn:   func() (Command, error) { return WireGuardAddAddressCommand("brb0", "10.70.0.2/32") },
+			want: []string{"ip", "address", "add", "10.70.0.2/32", "dev", "brb0"},
 		},
 		{
 			name: "set MTU",
-			fn:   func() (Command, error) { return WireGuardSetMTUCommand("tg-v7", 1280) },
-			want: []string{"ip", "link", "set", "mtu", "1280", "dev", "tg-v7"},
+			fn:   func() (Command, error) { return WireGuardSetMTUCommand("brb0", 1280) },
+			want: []string{"ip", "link", "set", "mtu", "1280", "dev", "brb0"},
 		},
 		{
 			name: "set up",
-			fn:   func() (Command, error) { return WireGuardSetUpCommand("tg-v7") },
-			want: []string{"ip", "link", "set", "up", "dev", "tg-v7"},
+			fn:   func() (Command, error) { return WireGuardSetUpCommand("brb0") },
+			want: []string{"ip", "link", "set", "up", "dev", "brb0"},
 		},
 	}
 
@@ -57,20 +57,20 @@ func TestWireGuardInterfaceCommands(t *testing.T) {
 }
 
 func TestWireGuardRouteCommands(t *testing.T) {
-	command, err := WireGuardRouteReplaceCommand("tg-v7", "0.0.0.0/0")
+	command, err := WireGuardRouteReplaceCommand("brb0", "0.0.0.0/0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"ip", "-4", "route", "replace", "0.0.0.0/0", "dev", "tg-v7"}
+	want := []string{"ip", "-4", "route", "replace", "0.0.0.0/0", "dev", "brb0"}
 	if !reflect.DeepEqual(command.Argv(), want) {
 		t.Fatalf("argv = %#v want %#v", command.Argv(), want)
 	}
 
-	command, err = WireGuardRouteDeleteCommand("tg-v7", "::/0")
+	command, err = WireGuardRouteDeleteCommand("brb0", "::/0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = []string{"ip", "-6", "route", "delete", "::/0", "dev", "tg-v7"}
+	want = []string{"ip", "-6", "route", "delete", "::/0", "dev", "brb0"}
 	if !reflect.DeepEqual(command.Argv(), want) {
 		t.Fatalf("argv = %#v want %#v", command.Argv(), want)
 	}
@@ -84,7 +84,7 @@ func TestWireGuardCommandRejectsInvalidInterfaceName(t *testing.T) {
 }
 
 func TestWireGuardCommandRejectsInvalidMTU(t *testing.T) {
-	_, err := WireGuardSetMTUCommand("tg-v7", 9000)
+	_, err := WireGuardSetMTUCommand("brb0", 9000)
 	if err == nil {
 		t.Fatal("expected error")
 	}

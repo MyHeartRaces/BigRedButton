@@ -118,24 +118,24 @@ func TestResolveCtlDNSCommands(t *testing.T) {
 		{
 			name: "dns",
 			fn: func() (Command, error) {
-				return ResolveCtlDNSCommand("tg-v7", []string{"1.1.1.1", "2606:4700:4700::1111"})
+				return ResolveCtlDNSCommand("brb0", []string{"1.1.1.1", "2606:4700:4700::1111"})
 			},
-			want: []string{"resolvectl", "dns", "tg-v7", "1.1.1.1", "2606:4700:4700::1111"},
+			want: []string{"resolvectl", "dns", "brb0", "1.1.1.1", "2606:4700:4700::1111"},
 		},
 		{
 			name: "domain",
-			fn:   func() (Command, error) { return ResolveCtlDomainCommand("tg-v7", []string{"~."}) },
-			want: []string{"resolvectl", "domain", "tg-v7", "~."},
+			fn:   func() (Command, error) { return ResolveCtlDomainCommand("brb0", []string{"~."}) },
+			want: []string{"resolvectl", "domain", "brb0", "~."},
 		},
 		{
 			name: "default-route",
-			fn:   func() (Command, error) { return ResolveCtlDefaultRouteCommand("tg-v7", true) },
-			want: []string{"resolvectl", "default-route", "tg-v7", "yes"},
+			fn:   func() (Command, error) { return ResolveCtlDefaultRouteCommand("brb0", true) },
+			want: []string{"resolvectl", "default-route", "brb0", "yes"},
 		},
 		{
 			name: "revert",
-			fn:   func() (Command, error) { return ResolveCtlRevertCommand("tg-v7") },
-			want: []string{"resolvectl", "revert", "tg-v7"},
+			fn:   func() (Command, error) { return ResolveCtlRevertCommand("brb0") },
+			want: []string{"resolvectl", "revert", "brb0"},
 		},
 	}
 
@@ -153,7 +153,7 @@ func TestResolveCtlDNSCommands(t *testing.T) {
 }
 
 func TestResolveCtlDNSCommandRejectsInvalidServer(t *testing.T) {
-	_, err := ResolveCtlDNSCommand("tg-v7", []string{"not-an-ip"})
+	_, err := ResolveCtlDNSCommand("brb0", []string{"not-an-ip"})
 	if err == nil {
 		t.Fatal("expected error")
 	}

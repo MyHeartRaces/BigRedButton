@@ -132,6 +132,9 @@ From a clean checkout on Arch Linux:
 sudo pacman -U dist/arch/makepkg/big-red-button-*.pkg.tar.zst
 ```
 
+To build another package version locally, pass `PKGVER`, or use `make
+arch-package VERSION=<version>`.
+
 The package installs:
 
 - `/usr/bin/big-red-button`

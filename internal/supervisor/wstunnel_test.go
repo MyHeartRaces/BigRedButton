@@ -10,13 +10,13 @@ import (
 
 func TestWSTunnelClientCommandFromProfile(t *testing.T) {
 	config := loadProfile(t)
-	command, err := WSTunnelClientCommand(WSTunnelClientConfigFromProfile(config, "/opt/tracegate/wstunnel"))
+	command, err := WSTunnelClientCommand(WSTunnelClientConfigFromProfile(config, "/opt/big-red-button/wstunnel"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	want := []string{
-		"/opt/tracegate/wstunnel",
+		"/opt/big-red-button/wstunnel",
 		"client",
 		"--log-lvl", "INFO",
 		"--http-upgrade-path-prefix", "cdn/ws",

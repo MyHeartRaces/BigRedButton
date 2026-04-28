@@ -10,7 +10,7 @@ import (
 
 func TestRenderSetConf(t *testing.T) {
 	profileConfig := loadProfile(t)
-	config := ConfigFromProfile(profileConfig, "tg-v7")
+	config := ConfigFromProfile(profileConfig, "brb0")
 
 	rendered, err := RenderSetConf(config)
 	if err != nil {
@@ -34,7 +34,7 @@ func TestRenderSetConf(t *testing.T) {
 
 func TestSummaryIsSecretFree(t *testing.T) {
 	profileConfig := loadProfile(t)
-	config := ConfigFromProfile(profileConfig, "tg-v7")
+	config := ConfigFromProfile(profileConfig, "brb0")
 	summary := config.Summary()
 
 	payload, err := json.Marshal(summary)
@@ -52,7 +52,7 @@ func TestSummaryIsSecretFree(t *testing.T) {
 }
 
 func TestValidateRejectsInvalidConfig(t *testing.T) {
-	config := ConfigFromProfile(loadProfile(t), "tg-v7")
+	config := ConfigFromProfile(loadProfile(t), "brb0")
 	config.AllowedIPs = []string{"not-a-prefix"}
 
 	if err := config.Validate(); err == nil {

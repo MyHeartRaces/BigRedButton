@@ -16,7 +16,7 @@ func TestConnectPlanWithEndpointIPs(t *testing.T) {
 		DefaultGateway:     "192.0.2.1",
 		DefaultInterface:   "eth0",
 		WireGuardInterface: "tg-test",
-		RuntimeRoot:        "/run/test-tracegate",
+		RuntimeRoot:        "/run/test-brb",
 	})
 	if err != nil {
 		t.Fatalf("Connect() error = %v", err)
@@ -122,7 +122,7 @@ func TestConnectPlanRejectsInvalidDNS(t *testing.T) {
 }
 
 func TestDisconnectPlan(t *testing.T) {
-	plan, err := Disconnect(Options{WireGuardInterface: "tg-test", RuntimeRoot: "/run/test-tracegate"})
+	plan, err := Disconnect(Options{WireGuardInterface: "tg-test", RuntimeRoot: "/run/test-brb"})
 	if err != nil {
 		t.Fatalf("Disconnect() error = %v", err)
 	}

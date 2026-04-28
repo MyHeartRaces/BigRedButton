@@ -35,7 +35,7 @@ clean:
 	rm -rf build dist
 
 arch-package:
-	./scripts/build-arch-package.sh
+	PKGVER="$(VERSION)" ./scripts/build-arch-package.sh
 
 macos-package:
-	./scripts/build-macos-package.sh
+	VERSION="$(VERSION)" ./scripts/build-macos-package.sh
