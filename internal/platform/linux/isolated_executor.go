@@ -575,6 +575,10 @@ func (e *IsolatedExecutor) stopRuntimeProcess(ctx context.Context, stepID string
 		e.recordRuntime(OperationApply, stepID, "no "+label+" process in runtime state")
 		return nil
 	}
+	if !supervisor.PIDArgvMatches(process.PID, process.Argv) {
+		e.recordRuntime(OperationApply, stepID, fmt.Sprintf("skip %s pid %d: argv does not match runtime state", label, process.PID))
+		return nil
+	}
 	if err := e.stopper.StopPID(ctx, process.PID); err != nil {
 		return err
 	}
@@ -589,11 +593,15 @@ func (e *IsolatedExecutor) stopIsolatedApp(ctx context.Context, step planner.Ste
 	}
 	seen := map[int]struct{}{}
 	if state.AppProcess != nil {
-		if err := e.stopper.StopPID(ctx, state.AppProcess.PID); err != nil {
-			return err
+		if supervisor.PIDArgvMatches(state.AppProcess.PID, state.AppProcess.Argv) {
+			if err := e.stopper.StopPID(ctx, state.AppProcess.PID); err != nil {
+				return err
+			}
+			seen[state.AppProcess.PID] = struct{}{}
+			e.recordRuntime(OperationApply, step.ID, fmt.Sprintf("stop app pid %d", state.AppProcess.PID))
+		} else {
+			e.recordRuntime(OperationApply, step.ID, fmt.Sprintf("skip app pid %d: argv does not match runtime state", state.AppProcess.PID))
 		}
-		seen[state.AppProcess.PID] = struct{}{}
-		e.recordRuntime(OperationApply, step.ID, fmt.Sprintf("stop app pid %d", state.AppProcess.PID))
 	}
 	command, err := NetNSPidsCommand(state.Namespace)
 	if err != nil {

@@ -28,3 +28,15 @@ func TestPIDExists(t *testing.T) {
 		t.Fatal("expected current process to exist on Linux")
 	}
 }
+
+func TestArgvMatches(t *testing.T) {
+	if !argvMatches([]string{"wstunnel", "client"}, []string{"/usr/bin/wstunnel", "client"}) {
+		t.Fatal("expected basename command match")
+	}
+	if argvMatches([]string{"wstunnel", "client"}, []string{"/usr/bin/wstunnel", "server"}) {
+		t.Fatal("unexpected argument match")
+	}
+	if argvMatches([]string{"wstunnel", "client"}, []string{"/usr/bin/wstunnel", "client", "extra"}) {
+		t.Fatal("unexpected length match")
+	}
+}

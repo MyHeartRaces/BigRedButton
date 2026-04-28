@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -91,4 +93,54 @@ func pidExists(pid int) bool {
 	}
 	_, err := os.Stat(filepath.Join("/proc", strconv.Itoa(pid)))
 	return err == nil || !os.IsNotExist(err)
+}
+
+func PIDArgvMatches(pid int, expected []string) bool {
+	if len(expected) == 0 || runtime.GOOS != "linux" {
+		return true
+	}
+	actual, err := readLinuxPIDArgv(pid)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true
+		}
+		return false
+	}
+	return argvMatches(expected, actual)
+}
+
+func readLinuxPIDArgv(pid int) ([]string, error) {
+	if pid < 1 {
+		return nil, fmt.Errorf("process PID is required")
+	}
+	payload, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
+	if err != nil {
+		return nil, err
+	}
+	raw := strings.Split(strings.TrimRight(string(payload), "\x00"), "\x00")
+	out := make([]string, 0, len(raw))
+	for _, arg := range raw {
+		if arg != "" {
+			out = append(out, arg)
+		}
+	}
+	return out, nil
+}
+
+func argvMatches(expected []string, actual []string) bool {
+	if len(expected) == 0 {
+		return true
+	}
+	if len(expected) != len(actual) || len(actual) == 0 {
+		return false
+	}
+	if expected[0] != actual[0] && filepath.Base(expected[0]) != filepath.Base(actual[0]) {
+		return false
+	}
+	for index := 1; index < len(expected); index++ {
+		if expected[index] != actual[index] {
+			return false
+		}
+	}
+	return true
 }

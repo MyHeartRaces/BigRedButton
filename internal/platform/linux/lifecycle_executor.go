@@ -212,6 +212,10 @@ func (e *LifecycleExecutor) stopWSTunnel(ctx context.Context, step planner.Step)
 		e.route.recordRuntime(OperationApply, step.ID, "no wstunnel process in runtime state")
 		return nil
 	}
+	if !supervisor.PIDArgvMatches(state.WSTunnelProcess.PID, state.WSTunnelProcess.Argv) {
+		e.route.recordRuntime(OperationApply, step.ID, fmt.Sprintf("skip pid %d: argv does not match runtime state", state.WSTunnelProcess.PID))
+		return nil
+	}
 	if err := e.stopper.StopPID(ctx, state.WSTunnelProcess.PID); err != nil {
 		return err
 	}
