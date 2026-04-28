@@ -215,6 +215,31 @@ func TestWithLinuxPrivilegeHelperSkipsPKExecForRoot(t *testing.T) {
 	}
 }
 
+func TestLinuxPrivilegeHelperStatus(t *testing.T) {
+	defer forceDesktopRuntime("linux", 1000, func(binary string) (string, error) {
+		if binary == "pkexec" {
+			return "/usr/bin/pkexec", nil
+		}
+		return "", fmt.Errorf("not found")
+	})()
+
+	got := linuxPrivilegeHelperStatus()
+	if got != "pkexec: /usr/bin/pkexec" {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+func TestLinuxPrivilegeHelperStatusMissingPKExec(t *testing.T) {
+	defer forceDesktopRuntime("linux", 1000, func(binary string) (string, error) {
+		return "", fmt.Errorf("%s missing", binary)
+	})()
+
+	got := linuxPrivilegeHelperStatus()
+	if got != "missing pkexec" {
+		t.Fatalf("status = %q", got)
+	}
+}
+
 func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 	for _, want := range []string{
 		`id="isolated-cleanup"`,
@@ -228,6 +253,7 @@ func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 		`Recover Dirty`,
 		`known isolated sessions`,
 		`app version`,
+		`privilege helper`,
 	} {
 		if !strings.Contains(indexHTML, want) {
 			t.Fatalf("missing %q in UI", want)

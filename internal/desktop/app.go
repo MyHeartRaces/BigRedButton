@@ -58,6 +58,8 @@ type guiState struct {
 type statusResponse struct {
 	Version          buildinfo.Info                   `json:"version"`
 	OS               string                           `json:"os"`
+	CLIPath          string                           `json:"cli_path,omitempty"`
+	PrivilegeHelper  string                           `json:"privilege_helper,omitempty"`
 	GUI              guiState                         `json:"gui"`
 	Runtime          status.Snapshot                  `json:"runtime"`
 	Isolated         *status.Snapshot                 `json:"isolated,omitempty"`
@@ -518,10 +520,12 @@ func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
 func (a *app) statusPayload(ctx context.Context) statusResponse {
 	state := a.loadState()
 	response := statusResponse{
-		Version: buildinfo.Current(),
-		OS:      desktopGOOS,
-		GUI:     state,
-		Runtime: status.FromStore(ctx, truntime.Store{Root: planner.DefaultRuntimeRoot}),
+		Version:         buildinfo.Current(),
+		OS:              desktopGOOS,
+		CLIPath:         a.cliPath,
+		PrivilegeHelper: linuxPrivilegeHelperStatus(),
+		GUI:             state,
+		Runtime:         status.FromStore(ctx, truntime.Store{Root: planner.DefaultRuntimeRoot}),
 	}
 	if strings.TrimSpace(state.IsolatedSession) != "" {
 		isolated := status.FromStore(ctx, truntime.Store{Root: filepath.Join(planner.DefaultRuntimeRoot, planner.DefaultIsolatedRuntimeSubdir, state.IsolatedSession)})
@@ -596,6 +600,20 @@ func withLinuxPrivilegeHelper(command []string) ([]string, error) {
 		return nil, fmt.Errorf("pkexec was not found; install polkit or run big-red-button from a root shell: %w", err)
 	}
 	return append([]string{pkexec}, command...), nil
+}
+
+func linuxPrivilegeHelperStatus() string {
+	if desktopGOOS != "linux" {
+		return "not required on " + desktopGOOS
+	}
+	if desktopGeteuid() == 0 {
+		return "not required while running as root"
+	}
+	pkexec, err := desktopLookPath("pkexec")
+	if err != nil {
+		return "missing pkexec"
+	}
+	return "pkexec: " + pkexec
 }
 
 func (a *app) loadState() guiState {

@@ -404,6 +404,8 @@ const indexHTML = `<!doctype html>
 
       runtimeEl.innerHTML = definitionList([
         ['app version', data.version && data.version.version ? data.version.version : ''],
+        ['cli path', data.cli_path || ''],
+        ['privilege helper', data.privilege_helper || ''],
         ['state', data.runtime.state],
         ['runtime root', data.runtime.runtime_root],
         ['profile fingerprint', data.runtime.active ? data.runtime.active.profile_fingerprint : ''],
