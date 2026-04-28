@@ -103,6 +103,7 @@ func Run(ctx context.Context, options Options) error {
 	mux.HandleFunc("/api/connect", a.connect)
 	mux.HandleFunc("/api/disconnect", a.disconnect)
 	mux.HandleFunc("/api/diagnostics", a.diagnostics)
+	mux.HandleFunc("/api/preflight", a.preflight)
 	mux.HandleFunc("/api/isolated/start", a.isolatedStart)
 	mux.HandleFunc("/api/isolated/stop", a.isolatedStop)
 	mux.HandleFunc("/api/isolated/cleanup", a.isolatedCleanup)
@@ -284,6 +285,40 @@ func (a *app) diagnostics(w http.ResponseWriter, r *http.Request) {
 	state := a.loadState()
 	response := a.runCLIUnprivileged(r.Context(), "diagnostics", buildDiagnosticsArgs(state))
 	state.LastCommand = "diagnostics"
+	state.LastCommandTime = time.Now().Format(time.RFC3339)
+	state.LastOutput = response.Output
+	_ = a.saveState(state)
+	writeJSON(w, response)
+}
+
+func (a *app) preflight(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	request, err := decodeAction(r.Body)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
+		return
+	}
+	if stdruntime.GOOS != "linux" {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "Linux preflight is implemented only on Linux"})
+		return
+	}
+	state := a.loadState()
+	if strings.TrimSpace(request.EndpointIP) != "" {
+		state.EndpointIP = strings.TrimSpace(request.EndpointIP)
+	}
+	if strings.TrimSpace(request.WSTunnelBinary) != "" {
+		state.WSTunnelBinary = strings.TrimSpace(request.WSTunnelBinary)
+	}
+	args, err := buildLinuxPreflightArgs(state)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
+		return
+	}
+	response := a.runCLIUnprivileged(r.Context(), "preflight", args)
+	state.LastCommand = "preflight"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
 	_ = a.saveState(state)
@@ -571,6 +606,22 @@ func buildDiagnosticsArgs(state guiState) []string {
 		args = append(args, "-profile", profilePath)
 	}
 	return args
+}
+
+func buildLinuxPreflightArgs(state guiState) ([]string, error) {
+	profilePath := strings.TrimSpace(state.ProfilePath)
+	if profilePath == "" {
+		return nil, errors.New("upload a profile first")
+	}
+	args := []string{"linux-preflight", "-discover-routes"}
+	if endpointIP := strings.TrimSpace(state.EndpointIP); endpointIP != "" {
+		args = append(args, "-endpoint-ip", endpointIP)
+	}
+	if wstunnelBinary := strings.TrimSpace(state.WSTunnelBinary); wstunnelBinary != "" {
+		args = append(args, "-wstunnel-binary", wstunnelBinary)
+	}
+	args = append(args, profilePath)
+	return args, nil
 }
 
 func clearIsolatedSessionOnSuccess(state guiState, response actionResponse) guiState {

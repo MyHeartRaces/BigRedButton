@@ -16,6 +16,10 @@ func defaultLookPath(lookPath lookPathFunc) lookPathFunc {
 	return lookPath
 }
 
+func ValidateExecutable(lookPath func(string) (string, error), binary string) error {
+	return validateExecutable(lookPath, binary)
+}
+
 func validateExecutable(lookPath lookPathFunc, binary string) error {
 	binary = strings.TrimSpace(binary)
 	if binary == "" {

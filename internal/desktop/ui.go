@@ -279,6 +279,7 @@ const indexHTML = `<!doctype html>
         <div class="row">
           <button class="primary" id="connect" type="button">Connect</button>
           <button id="disconnect" type="button">Disconnect</button>
+          <button id="preflight" type="button">Preflight</button>
           <button id="diagnostics" type="button">Diagnostics</button>
           <button id="refresh" type="button">Refresh</button>
         </div>
@@ -325,6 +326,7 @@ const indexHTML = `<!doctype html>
     const isolatedCommandEl = document.getElementById('isolated-command');
     const connectButton = document.getElementById('connect');
     const disconnectButton = document.getElementById('disconnect');
+    const preflightButton = document.getElementById('preflight');
     const diagnosticsButton = document.getElementById('diagnostics');
     const isolatedStartButton = document.getElementById('isolated-start');
     const isolatedStopButton = document.getElementById('isolated-stop');
@@ -351,6 +353,7 @@ const indexHTML = `<!doctype html>
     function setBusy(busy) {
       connectButton.disabled = busy;
       disconnectButton.disabled = busy;
+      preflightButton.disabled = busy;
       diagnosticsButton.disabled = busy;
       isolatedStartButton.disabled = busy;
       isolatedStopButton.disabled = busy;
@@ -465,6 +468,7 @@ const indexHTML = `<!doctype html>
 
     connectButton.addEventListener('click', () => action(systemTogglePath()));
     disconnectButton.addEventListener('click', () => action('/api/disconnect'));
+    preflightButton.addEventListener('click', () => action('/api/preflight'));
     diagnosticsButton.addEventListener('click', () => action('/api/diagnostics'));
     isolatedStartButton.addEventListener('click', () => action('/api/isolated/start'));
     isolatedStopButton.addEventListener('click', () => action('/api/isolated/stop'));

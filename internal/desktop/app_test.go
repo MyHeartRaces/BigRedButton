@@ -85,6 +85,28 @@ func TestBuildDiagnosticsArgsIncludesProfileWhenSaved(t *testing.T) {
 	}
 }
 
+func TestBuildLinuxPreflightArgs(t *testing.T) {
+	args, err := buildLinuxPreflightArgs(guiState{
+		ProfilePath:     " /tmp/profile.json ",
+		EndpointIP:      " 203.0.113.10 ",
+		WSTunnelBinary:  " /usr/bin/wstunnel ",
+		IsolatedSession: "ignored",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(args, " ")
+	want := "linux-preflight -discover-routes -endpoint-ip 203.0.113.10 -wstunnel-binary /usr/bin/wstunnel /tmp/profile.json"
+	if got != want {
+		t.Fatalf("args = %q want %q", got, want)
+	}
+
+	_, err = buildLinuxPreflightArgs(guiState{})
+	if err == nil {
+		t.Fatal("expected missing profile error")
+	}
+}
+
 func TestClearIsolatedSessionOnSuccess(t *testing.T) {
 	state := guiState{IsolatedSession: "123e4567-e89b-12d3-a456-426614174000"}
 	cleared := clearIsolatedSessionOnSuccess(state, actionResponse{OK: true})

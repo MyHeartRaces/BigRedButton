@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	userpkg "os/user"
 	"path/filepath"
 	stdruntime "runtime"
@@ -20,6 +21,7 @@ import (
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 	platformlinux "github.com/MyHeartRaces/BigRedButton/internal/platform/linux"
 	"github.com/MyHeartRaces/BigRedButton/internal/profile"
+	"github.com/MyHeartRaces/BigRedButton/internal/routes"
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
 	"github.com/MyHeartRaces/BigRedButton/internal/status"
 	"github.com/MyHeartRaces/BigRedButton/internal/supervisor"
@@ -27,6 +29,8 @@ import (
 
 var currentGOOS = stdruntime.GOOS
 var lookupIPAddr = net.DefaultResolver.LookupIPAddr
+var executableLookPath = exec.LookPath
+var preflightCommandRunner platformlinux.CommandRunner = platformlinux.ExecRunner{}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -61,6 +65,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return printDiagnostics(args[1:], stdout, stderr)
 	case "linux-dry-run-connect":
 		return linuxDryRunConnect(args[1:], stdout, stderr)
+	case "linux-preflight":
+		return linuxPreflight(args[1:], stdout, stderr)
 	case "linux-dry-run-isolated-app":
 		return linuxDryRunIsolatedApp(args[1:], stdout, stderr)
 	case "linux-dry-run-disconnect":
@@ -444,6 +450,87 @@ func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+func linuxPreflight(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-preflight", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	discoverRoutes := fs.Bool("discover-routes", false, "run read-only Linux route discovery")
+	options := planConnectFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintln(stderr, "usage: big-red-button linux-preflight [-json] [-discover-routes] [-endpoint-ip ip[,ip]] <profile.json>")
+		return 2
+	}
+	if currentGOOS != "linux" {
+		fmt.Fprintf(stderr, "linux-preflight can only run on Linux; current OS is %s\n", currentGOOS)
+		return 1
+	}
+
+	output := linuxPreflightOutput{}
+	config, err := profile.LoadFile(fs.Arg(0))
+	if err != nil {
+		output.Checks = append(output.Checks, preflightCheck{
+			Name:   "profile",
+			Status: "failed",
+			Detail: err.Error(),
+		})
+		if *jsonOutput {
+			writeJSON(stdout, output)
+		} else {
+			printLinuxPreflight(output, stdout)
+		}
+		return 1
+	}
+	summary := config.Summary()
+	output.Profile = &summary
+	output.Checks = append(output.Checks, preflightCheck{Name: "profile", Status: "ok", Detail: "profile is valid"})
+
+	endpointIPs := csvOption(*options.endpointIPs)
+	if len(endpointIPs) == 0 {
+		endpointIPs, err = resolveEndpointIPs(context.Background(), config.WSTunnelHost)
+		if err != nil {
+			output.Checks = append(output.Checks, preflightCheck{Name: "resolve endpoint", Status: "failed", Detail: err.Error()})
+			if *jsonOutput {
+				writeJSON(stdout, output)
+			} else {
+				printLinuxPreflight(output, stdout)
+			}
+			return 1
+		}
+	}
+	output.EndpointIPs = endpointIPs
+	output.Checks = append(output.Checks, preflightCheck{Name: "resolve endpoint", Status: "ok", Detail: strings.Join(endpointIPs, ", ")})
+
+	plan, err := buildConnectPlan(config, options, endpointIPs)
+	if err != nil {
+		output.Checks = append(output.Checks, preflightCheck{Name: "plan", Status: "failed", Detail: err.Error()})
+		if *jsonOutput {
+			writeJSON(stdout, output)
+		} else {
+			printLinuxPreflight(output, stdout)
+		}
+		return 1
+	}
+	output.Plan = &plan
+	output.Checks = append(output.Checks, preflightCheck{Name: "plan", Status: "ok", Detail: "connect plan is buildable"})
+	output.Checks = append(output.Checks, linuxPrerequisiteChecks(plan)...)
+	if *discoverRoutes {
+		output.Checks = append(output.Checks, linuxRouteDiscoveryChecks(context.Background(), endpointIPs)...)
+	}
+
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printLinuxPreflight(output, stdout)
+	}
+	if linuxPreflightOK(output) {
+		return 0
+	}
+	return 1
 }
 
 func linuxDryRunIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -1088,6 +1175,19 @@ type linuxDryRunOutput struct {
 	Operations []platformlinux.Operation `json:"operations"`
 }
 
+type linuxPreflightOutput struct {
+	Profile     *profile.Summary `json:"profile,omitempty"`
+	EndpointIPs []string         `json:"endpoint_ips,omitempty"`
+	Plan        *planner.Plan    `json:"plan,omitempty"`
+	Checks      []preflightCheck `json:"checks"`
+}
+
+type preflightCheck struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Detail string `json:"detail,omitempty"`
+}
+
 type linuxLifecycleOutput struct {
 	Plan                planner.Plan                   `json:"plan"`
 	Result              engine.Result                  `json:"result"`
@@ -1367,6 +1467,106 @@ func printLinuxDryRun(output linuxDryRunOutput, stdout io.Writer) {
 	}
 }
 
+func printLinuxPreflight(output linuxPreflightOutput, stdout io.Writer) {
+	fmt.Fprintln(stdout, "linux preflight")
+	if output.Profile != nil {
+		fmt.Fprintf(stdout, "profile fingerprint: %s\n", output.Profile.Fingerprint)
+		fmt.Fprintf(stdout, "profile gateway: %s\n", output.Profile.WSTunnelURL)
+	}
+	if len(output.EndpointIPs) > 0 {
+		fmt.Fprintf(stdout, "endpoint IPs: %v\n", output.EndpointIPs)
+	}
+	if output.Plan != nil && len(output.Plan.Warnings) > 0 {
+		fmt.Fprintln(stdout, "warnings:")
+		for _, warning := range output.Plan.Warnings {
+			fmt.Fprintf(stdout, "- %s\n", warning)
+		}
+	}
+	if len(output.Checks) == 0 {
+		fmt.Fprintln(stdout, "checks: []")
+		return
+	}
+	fmt.Fprintln(stdout, "checks:")
+	for _, check := range output.Checks {
+		if check.Detail == "" {
+			fmt.Fprintf(stdout, "- %s %s\n", check.Status, check.Name)
+			continue
+		}
+		fmt.Fprintf(stdout, "- %s %s: %s\n", check.Status, check.Name, check.Detail)
+	}
+}
+
+func linuxPreflightOK(output linuxPreflightOutput) bool {
+	if len(output.Checks) == 0 {
+		return false
+	}
+	for _, check := range output.Checks {
+		if check.Status != "ok" {
+			return false
+		}
+	}
+	return true
+}
+
+func linuxPrerequisiteChecks(plan planner.Plan) []preflightCheck {
+	var checks []preflightCheck
+	for _, step := range plan.Steps {
+		if step.ID != "validate-linux-prerequisites" {
+			continue
+		}
+		for _, binary := range stepDetailValues(step, "binary") {
+			check := preflightCheck{Name: "binary " + binary, Status: "ok", Detail: "found"}
+			if err := platformlinux.ValidateExecutable(executableLookPath, binary); err != nil {
+				check.Status = "failed"
+				check.Detail = err.Error()
+			}
+			checks = append(checks, check)
+		}
+	}
+	return checks
+}
+
+func linuxRouteDiscoveryChecks(ctx context.Context, endpointIPs []string) []preflightCheck {
+	checks := make([]preflightCheck, 0, len(endpointIPs))
+	for _, endpointIP := range endpointIPs {
+		check := preflightCheck{Name: "route " + endpointIP, Status: "ok"}
+		exclusion, err := platformlinux.DiscoverEndpointExclusion(ctx, preflightCommandRunner, endpointIP)
+		if err != nil {
+			check.Status = "failed"
+			check.Detail = err.Error()
+		} else {
+			check.Detail = routeExclusionDetail(exclusion)
+		}
+		checks = append(checks, check)
+	}
+	return checks
+}
+
+func routeExclusionDetail(exclusion routes.EndpointExclusion) string {
+	var parts []string
+	if exclusion.Destination != "" {
+		parts = append(parts, exclusion.Destination)
+	}
+	if exclusion.Gateway != "" {
+		parts = append(parts, "via "+exclusion.Gateway)
+	}
+	if exclusion.Interface != "" {
+		parts = append(parts, "dev "+exclusion.Interface)
+	}
+	return strings.Join(parts, " ")
+}
+
+func stepDetailValues(step planner.Step, key string) []string {
+	prefix := key + "="
+	var values []string
+	for _, detail := range step.Details {
+		if value, ok := strings.CutPrefix(detail, prefix); ok {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
 func printLinuxLifecycle(output linuxLifecycleOutput, stdout io.Writer) {
 	fmt.Fprintf(stdout, "engine state: %s\n", output.Result.State)
 	if output.Result.Error != "" {
@@ -1636,6 +1836,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  isolated-sessions [-json] [-runtime-root path]")
 	fmt.Fprintln(w, "  diagnostics [-json] [-runtime-root path] [-profile profile.json]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
+	fmt.Fprintln(w, "  linux-preflight [-json] [-discover-routes] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  linux-dry-run-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")

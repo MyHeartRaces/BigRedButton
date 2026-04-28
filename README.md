@@ -25,6 +25,7 @@ Implemented:
 - runtime status snapshots with Linux process health checks
 - Linux route exclusions for the tunnel gateway
 - Linux system tunnel prerequisite checks before network mutation
+- Linux preflight command for endpoint, binary and route discovery checks
 - tunnel helper command builder and process executor
 - WireGuard `wg setconf` renderer and Linux executor
 - Linux system DNS adapter through `systemd-resolved` / `resolvectl`
@@ -160,6 +161,14 @@ big-red-button linux-dry-run-connect \
   -default-gateway 192.0.2.1 \
   -default-interface eth0 \
   testdata/profiles/valid-wgws.json
+```
+
+Linux preflight before a real connect:
+
+```bash
+big-red-button linux-preflight \
+  -discover-routes \
+  /path/to/profile.json
 ```
 
 ## Real Linux Connect

@@ -473,6 +473,64 @@ func TestLinuxDryRunConnectCommandFailsWithoutConcreteRouteExclusion(t *testing.
 	}
 }
 
+func TestLinuxPreflightCommand(t *testing.T) {
+	defer forceGOOS("linux")()
+	restoreLookup := stubLookupIPAddr(func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
+	})
+	defer restoreLookup()
+	restoreLookPath := stubExecutableLookPath(func(binary string) (string, error) {
+		return "/usr/bin/" + binary, nil
+	})
+	defer restoreLookPath()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"linux-preflight",
+		"../../testdata/profiles/valid-wgws.json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"linux preflight",
+		"endpoint IPs: [203.0.113.10]",
+		"ok profile: profile is valid",
+		"ok binary ip: found",
+		"ok binary wstunnel: found",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
+func TestLinuxPreflightCommandFailsMissingBinary(t *testing.T) {
+	defer forceGOOS("linux")()
+	restoreLookPath := stubExecutableLookPath(func(binary string) (string, error) {
+		if binary == "wstunnel" {
+			return "", fmt.Errorf("not found")
+		}
+		return "/usr/bin/" + binary, nil
+	})
+	defer restoreLookPath()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"linux-preflight",
+		"-endpoint-ip", "203.0.113.10",
+		"../../testdata/profiles/valid-wgws.json",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "failed binary wstunnel") {
+		t.Fatalf("expected missing binary failure, got: %s", out)
+	}
+}
+
 func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
 	runtimeRoot := t.TempDir()
 	var connectStdout, connectStderr bytes.Buffer
@@ -833,6 +891,14 @@ func stubLookupIPAddr(fn func(context.Context, string) ([]net.IPAddr, error)) fu
 	lookupIPAddr = fn
 	return func() {
 		lookupIPAddr = previous
+	}
+}
+
+func stubExecutableLookPath(fn func(string) (string, error)) func() {
+	previous := executableLookPath
+	executableLookPath = fn
+	return func() {
+		executableLookPath = previous
 	}
 }
 
