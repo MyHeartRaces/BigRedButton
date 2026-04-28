@@ -114,6 +114,7 @@ func Run(ctx context.Context, options Options) error {
 	mux.HandleFunc("/api/connect", a.connect)
 	mux.HandleFunc("/api/disconnect", a.disconnect)
 	mux.HandleFunc("/api/diagnostics", a.diagnostics)
+	mux.HandleFunc("/api/diagnostics-bundle", a.diagnosticsBundle)
 	mux.HandleFunc("/api/preflight", a.preflight)
 	mux.HandleFunc("/api/isolated/preflight", a.isolatedPreflight)
 	mux.HandleFunc("/api/isolated/start", a.isolatedStart)
@@ -297,6 +298,26 @@ func (a *app) diagnostics(w http.ResponseWriter, r *http.Request) {
 	state := a.loadState()
 	response := a.runCLIUnprivileged(r.Context(), "diagnostics", buildDiagnosticsArgs(state))
 	state.LastCommand = "diagnostics"
+	state.LastCommandTime = time.Now().Format(time.RFC3339)
+	state.LastOutput = response.Output
+	_ = a.saveState(state)
+	writeJSON(w, response)
+}
+
+func (a *app) diagnosticsBundle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	state := a.loadState()
+	outputDir := filepath.Join(a.configDir, "diagnostics")
+	if err := os.MkdirAll(outputDir, 0o700); err != nil {
+		writeJSONStatus(w, http.StatusInternalServerError, actionResponse{Error: "create diagnostics directory: " + err.Error()})
+		return
+	}
+	outputPath := filepath.Join(outputDir, "big-red-button-diagnostics-"+time.Now().UTC().Format("20060102-150405")+".tar.gz")
+	response := a.runCLIUnprivileged(r.Context(), "diagnostics bundle", buildDiagnosticsBundleArgs(state, outputPath))
+	state.LastCommand = "diagnostics-bundle"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
 	_ = a.saveState(state)
@@ -680,6 +701,14 @@ func buildLinuxConnectArgs(state guiState) ([]string, error) {
 
 func buildDiagnosticsArgs(state guiState) []string {
 	args := []string{"diagnostics", "-runtime-root", planner.DefaultRuntimeRoot}
+	if profilePath := strings.TrimSpace(state.ProfilePath); profilePath != "" {
+		args = append(args, "-profile", profilePath)
+	}
+	return args
+}
+
+func buildDiagnosticsBundleArgs(state guiState, outputPath string) []string {
+	args := []string{"diagnostics-bundle", "-runtime-root", planner.DefaultRuntimeRoot, "-output", outputPath}
 	if profilePath := strings.TrimSpace(state.ProfilePath); profilePath != "" {
 		args = append(args, "-profile", profilePath)
 	}

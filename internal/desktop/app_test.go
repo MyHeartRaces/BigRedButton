@@ -86,6 +86,15 @@ func TestBuildDiagnosticsArgsIncludesProfileWhenSaved(t *testing.T) {
 	}
 }
 
+func TestBuildDiagnosticsBundleArgsIncludesOutputAndProfile(t *testing.T) {
+	args := buildDiagnosticsBundleArgs(guiState{ProfilePath: " /tmp/profile.json "}, "/tmp/brb-diag.tar.gz")
+	got := strings.Join(args, " ")
+	want := "diagnostics-bundle -runtime-root /run/big-red-button -output /tmp/brb-diag.tar.gz -profile /tmp/profile.json"
+	if got != want {
+		t.Fatalf("args = %q want %q", got, want)
+	}
+}
+
 func TestBuildLinuxPreflightArgs(t *testing.T) {
 	args, err := buildLinuxPreflightArgs(guiState{
 		ProfilePath:     " /tmp/profile.json ",
@@ -246,6 +255,8 @@ func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 		`/api/isolated/cleanup`,
 		`id="isolated-preflight"`,
 		`/api/isolated/preflight`,
+		`id="diagnostics-bundle"`,
+		`/api/diagnostics-bundle`,
 		`id="isolated-recover"`,
 		`/api/isolated/recover`,
 		`Preflight`,

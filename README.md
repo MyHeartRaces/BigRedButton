@@ -237,6 +237,10 @@ big-red-button diagnostics-bundle \
 The bundle contains redacted text and JSON diagnostics plus a small manifest.
 It is designed for issue reports and tester feedback.
 
+The GUI exposes the same bundle creation through the `Bundle` button in the
+connection section. It writes the archive under the user's Big Red Button
+configuration directory and prints the final path in the output panel.
+
 ## Linux Isolated App Tunnel
 
 This mode launches one selected process inside a Linux network namespace. It
