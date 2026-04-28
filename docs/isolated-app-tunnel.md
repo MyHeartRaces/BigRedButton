@@ -226,10 +226,10 @@ The repository currently includes the first Linux implementation slice:
   `-cleanup-on-exit=false` only for manual lifecycle testing.
 - `linux-monitor-isolated-app -yes` waits for the saved isolated app PID to
   exit, then runs the normal isolated stop lifecycle for the same session.
-- `linux-stop-isolated-app -yes` stops launcher-owned app/WSTunnel processes,
-  enumerates remaining namespace PIDs with `ip netns pids`, removes namespace
-  routes, flushes namespace firewall rules, removes namespace DNS, deletes the
-  network namespace and clears runtime state.
+- `linux-stop-isolated-app -yes` stops launcher-owned monitor/app/WSTunnel
+  processes, enumerates remaining namespace PIDs with `ip netns pids`, removes
+  namespace routes, flushes namespace firewall rules, removes namespace DNS,
+  deletes the network namespace and clears runtime state.
 - `linux-cleanup-isolated-app -yes` is the best-effort recovery path for a
   known session UUID when normal runtime state is missing or stale. It uses the
   deterministic launcher-owned namespace, veth and WireGuard names derived from
@@ -242,8 +242,9 @@ The repository currently includes the first Linux implementation slice:
   runtime root, including dirty entries whose `state.json` cannot be loaded,
   so the GUI and CLI can surface recovery targets after a crash.
 - Linux status checks mark isolated sessions dirty when saved app or WSTunnel
-  PIDs are no longer present in `/proc`, instead of reporting dead sessions as
-  connected.
+  PIDs are no longer present in `/proc`. The monitor process PID is also stored
+  and checked, so a session whose cleanup monitor disappeared is surfaced as
+  dirty instead of connected.
 
 This is still early helper-level functionality. The GUI can start, stop and
 best-effort clean up a Linux isolated session through the CLI, and normal app

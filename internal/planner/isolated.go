@@ -330,6 +330,14 @@ func IsolatedAppStop(options IsolatedAppStopOptions) (Plan, error) {
 			SecretMaterialFree: true,
 		},
 		{
+			ID:                 "stop-isolated-monitor",
+			Action:             "Stop isolated cleanup monitor process",
+			Details:            []string{"session_id=" + sessionID},
+			RequiresPrivilege:  true,
+			DependsOnRuntime:   true,
+			SecretMaterialFree: true,
+		},
+		{
 			ID:                 "stop-isolated-app",
 			Action:             "Stop isolated app process tree",
 			Details:            []string{"session_id=" + sessionID},

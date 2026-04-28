@@ -92,6 +92,36 @@ func TestFromStoreDirtyWhenLinuxIsolatedProcessIsMissing(t *testing.T) {
 	}
 }
 
+func TestFromStoreDirtyWhenLinuxIsolatedMonitorProcessIsMissing(t *testing.T) {
+	if stdruntime.GOOS != "linux" {
+		t.Skip("Linux /proc process health check")
+	}
+	sessionID := "123e4567-e89b-12d3-a456-426614174000"
+	store := truntime.Store{Root: t.TempDir()}
+	err := store.Save(context.Background(), truntime.State{
+		Version:            truntime.StateVersion,
+		Mode:               planner.IsolatedAppTunnelKind,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "brbwg123e4567",
+		SessionID:          sessionID,
+		Namespace:          "brb-123e4567",
+		HostVeth:           "brbh123e4567",
+		NamespaceVeth:      "brbn123e4567",
+	}.WithMonitorProcess(999999999, []string{"missing-monitor"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := FromStore(context.Background(), store)
+
+	if snapshot.State != StateDirty {
+		t.Fatalf("state = %s", snapshot.State)
+	}
+	if !strings.Contains(snapshot.Error, "monitor pid 999999999") {
+		t.Fatalf("error = %s", snapshot.Error)
+	}
+}
+
 func TestFromStoreDirtyWhenLinuxSystemWSTunnelProcessIsMissing(t *testing.T) {
 	if stdruntime.GOOS != "linux" {
 		t.Skip("Linux /proc process health check")

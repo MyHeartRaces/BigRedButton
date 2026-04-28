@@ -294,7 +294,8 @@ print it in the plan/output. Use that UUID for stop, cleanup and status.
 waits for the selected app process to exit and then runs the normal isolated
 stop lifecycle to remove launcher-owned namespace, DNS, firewall and runtime
 state. Pass `-cleanup-on-exit=false` only when you intentionally want manual
-cleanup.
+cleanup. The monitor PID is recorded in runtime state, so status becomes dirty
+if the monitor disappears while the session is still active.
 
 Preflight:
 

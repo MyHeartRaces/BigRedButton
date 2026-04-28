@@ -421,6 +421,7 @@ const indexHTML = `<!doctype html>
         ['isolated namespace', isolated ? isolated.namespace : ''],
         ['isolated app pid', isolated && isolated.app_process ? isolated.app_process.pid : ''],
         ['isolated gateway pid', isolated && isolated.wstunnel_process ? isolated.wstunnel_process.pid : ''],
+        ['isolated monitor pid', isolated && isolated.monitor_process ? isolated.monitor_process.pid : ''],
         ['isolated error', data.isolated ? data.isolated.error || '' : ''],
         ['known isolated sessions', sessions.length ? sessions.map(session => {
           const snapshot = session.snapshot || {};

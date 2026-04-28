@@ -247,6 +247,7 @@ func TestIsolatedAppStopPlan(t *testing.T) {
 	for _, id := range []string{
 		"read-isolated-runtime-state",
 		"stop-isolated-app",
+		"stop-isolated-monitor",
 		"remove-namespace-kill-switch",
 		"remove-namespace-client-routes",
 		"remove-wireguard-interface-in-netns",

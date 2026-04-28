@@ -73,6 +73,10 @@ func TestIsolatedExecutorRunsSessionAndStop(t *testing.T) {
 	if state.AppProcess == nil || state.AppProcess.PID != 102 {
 		t.Fatalf("app state = %#v", state.AppProcess)
 	}
+	state = state.WithMonitorProcess(103, []string{"big-red-button", "linux-monitor-isolated-app"})
+	if err := (truntime.Store{Root: sessionRoot}).Save(context.Background(), state); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := os.Stat(filepath.Join(sessionRoot, "wg-setconf.conf")); !os.IsNotExist(err) {
 		t.Fatalf("expected temporary WireGuard config to be removed, err = %v", err)
 	}
@@ -128,7 +132,7 @@ func TestIsolatedExecutorRunsSessionAndStop(t *testing.T) {
 	if stopResult.State != engine.StateIdle {
 		t.Fatalf("stop state = %s error = %s", stopResult.State, stopResult.Error)
 	}
-	if len(stopper.stopped) != 2 || stopper.stopped[0] != 102 || stopper.stopped[1] != 101 {
+	if len(stopper.stopped) != 3 || stopper.stopped[0] != 103 || stopper.stopped[1] != 102 || stopper.stopped[2] != 101 {
 		t.Fatalf("stopped pids = %#v", stopper.stopped)
 	}
 	stopCommands := flattenArgv(stopRunner.argv)

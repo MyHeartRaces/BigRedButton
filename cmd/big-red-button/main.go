@@ -1074,6 +1074,10 @@ func linuxMonitorIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) 
 		return 2
 	}
 	store := truntime.Store{Root: filepath.Join(runtimeRoot, planner.DefaultIsolatedRuntimeSubdir, sessionID)}
+	if err := recordCurrentMonitorProcess(context.Background(), store); err != nil {
+		fmt.Fprintf(stderr, "record isolated monitor process: %v\n", err)
+		return 1
+	}
 	waitStarted := time.Now()
 	monitor, err := waitForIsolatedAppExit(context.Background(), store, *pollInterval, *waitTimeout)
 	if err != nil {
@@ -2310,6 +2314,18 @@ func waitForIsolatedAppExit(ctx context.Context, store truntime.Store, pollInter
 			return linuxIsolatedMonitorState{AppPID: state.AppProcess.PID}, err
 		}
 	}
+}
+
+func recordCurrentMonitorProcess(ctx context.Context, store truntime.Store) error {
+	state, err := store.Load(ctx)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	state = state.WithMonitorProcess(os.Getpid(), os.Args)
+	return store.Save(ctx, state)
 }
 
 func sleepContext(ctx context.Context, duration time.Duration) error {

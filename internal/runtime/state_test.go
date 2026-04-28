@@ -76,6 +76,27 @@ func TestStateWithWSTunnelProcess(t *testing.T) {
 	}
 }
 
+func TestStateWithMonitorProcess(t *testing.T) {
+	state := State{
+		Version:            StateVersion,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "tg-test",
+	}.WithMonitorProcess(4343, []string{"big-red-button", "linux-monitor-isolated-app"})
+
+	if err := state.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if state.MonitorProcess == nil {
+		t.Fatal("expected process state")
+	}
+	if state.MonitorProcess.PID != 4343 {
+		t.Fatalf("pid = %d", state.MonitorProcess.PID)
+	}
+	if state.MonitorProcess.Argv[1] != "linux-monitor-isolated-app" {
+		t.Fatalf("argv = %#v", state.MonitorProcess.Argv)
+	}
+}
+
 func TestStateRejectsInvalidWSTunnelProcess(t *testing.T) {
 	state := State{
 		Version:            StateVersion,
@@ -89,6 +110,23 @@ func TestStateRejectsInvalidWSTunnelProcess(t *testing.T) {
 		t.Fatal("expected error")
 	}
 	if !strings.Contains(err.Error(), "wstunnel process PID is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestStateRejectsInvalidMonitorProcess(t *testing.T) {
+	state := State{
+		Version:            StateVersion,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "tg-test",
+		MonitorProcess:     &ProcessState{},
+	}
+
+	err := state.Validate()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "monitor process PID is required") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

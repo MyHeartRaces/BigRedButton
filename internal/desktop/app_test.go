@@ -269,6 +269,7 @@ func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 		`Cleanup`,
 		`Recover Dirty`,
 		`known isolated sessions`,
+		`isolated monitor pid`,
 		`app version`,
 		`privilege helper`,
 	} {

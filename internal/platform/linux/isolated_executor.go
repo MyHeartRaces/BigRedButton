@@ -148,6 +148,8 @@ func (e *IsolatedExecutor) Apply(ctx context.Context, step planner.Step) error {
 		return e.readRuntimeState(ctx, step)
 	case "stop-isolated-app":
 		return e.stopIsolatedApp(ctx, step)
+	case "stop-isolated-monitor":
+		return e.stopRuntimeProcess(ctx, step.ID, "monitor", e.runtimeState.MonitorProcess)
 	case "remove-namespace-kill-switch":
 		state, err := e.stateForStop(ctx)
 		if err != nil {
@@ -565,9 +567,12 @@ func (e *IsolatedExecutor) stopRuntimeProcess(ctx context.Context, stepID string
 		if err != nil {
 			return err
 		}
-		if label == "app" {
+		switch label {
+		case "app":
 			process = state.AppProcess
-		} else {
+		case "monitor":
+			process = state.MonitorProcess
+		default:
 			process = state.WSTunnelProcess
 		}
 	}
@@ -577,6 +582,10 @@ func (e *IsolatedExecutor) stopRuntimeProcess(ctx context.Context, stepID string
 	}
 	if !supervisor.PIDArgvMatches(process.PID, process.Argv) {
 		e.recordRuntime(OperationApply, stepID, fmt.Sprintf("skip %s pid %d: argv does not match runtime state", label, process.PID))
+		return nil
+	}
+	if label == "monitor" && process.PID == os.Getpid() {
+		e.recordRuntime(OperationApply, stepID, fmt.Sprintf("skip monitor pid %d: current process owns cleanup", process.PID))
 		return nil
 	}
 	if err := e.stopper.StopPID(ctx, process.PID); err != nil {

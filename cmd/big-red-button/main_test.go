@@ -1101,6 +1101,35 @@ func TestWaitForIsolatedAppExitHonorsTimeout(t *testing.T) {
 	}
 }
 
+func TestRecordCurrentMonitorProcess(t *testing.T) {
+	store := truntime.Store{Root: filepath.Join(t.TempDir(), "isolated", "123e4567-e89b-12d3-a456-426614174000")}
+	state := monitorTestState().WithAppProcess(4242, []string{"/usr/bin/curl"})
+	if err := store.Save(context.Background(), state); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := recordCurrentMonitorProcess(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.MonitorProcess == nil || loaded.MonitorProcess.PID != os.Getpid() {
+		t.Fatalf("monitor process = %#v", loaded.MonitorProcess)
+	}
+	if len(loaded.MonitorProcess.Argv) == 0 {
+		t.Fatalf("monitor argv = %#v", loaded.MonitorProcess.Argv)
+	}
+}
+
+func TestRecordCurrentMonitorProcessIgnoresMissingRuntimeState(t *testing.T) {
+	store := truntime.Store{Root: filepath.Join(t.TempDir(), "isolated", "123e4567-e89b-12d3-a456-426614174000")}
+	if err := recordCurrentMonitorProcess(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestIsolatedRecoveryTargets(t *testing.T) {
 	sessions := []status.IsolatedSessionSnapshot{
 		{SessionID: "dirty", Snapshot: status.Snapshot{State: status.StateDirty}},

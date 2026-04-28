@@ -94,6 +94,9 @@ func markMissingProcesses(snapshot *Snapshot) {
 		if process := snapshot.Active.AppProcess; process != nil {
 			missing = appendProcessProblem(missing, "app", process)
 		}
+		if process := snapshot.Active.MonitorProcess; process != nil {
+			missing = appendProcessProblem(missing, "monitor", process)
+		}
 	}
 	if process := snapshot.Active.WSTunnelProcess; process != nil {
 		missing = appendProcessProblem(missing, "wstunnel", process)

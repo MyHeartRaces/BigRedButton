@@ -27,6 +27,7 @@ type State struct {
 	RouteExclusions     []routes.EndpointExclusion `json:"route_exclusions,omitempty"`
 	WSTunnelProcess     *ProcessState              `json:"wstunnel_process,omitempty"`
 	AppProcess          *ProcessState              `json:"app_process,omitempty"`
+	MonitorProcess      *ProcessState              `json:"monitor_process,omitempty"`
 	WireGuardAllowedIPs []string                   `json:"wireguard_allowed_ips,omitempty"`
 	DNSInterface        string                     `json:"dns_interface,omitempty"`
 	DNSServers          []string                   `json:"dns_servers,omitempty"`
@@ -144,6 +145,9 @@ func (s State) Validate() error {
 	if s.AppProcess != nil && s.AppProcess.PID < 1 {
 		return fmt.Errorf("runtime state app process PID is required")
 	}
+	if s.MonitorProcess != nil && s.MonitorProcess.PID < 1 {
+		return fmt.Errorf("runtime state monitor process PID is required")
+	}
 	if s.DNSApplied {
 		if strings.TrimSpace(s.DNSInterface) == "" {
 			return fmt.Errorf("runtime state DNS interface is required")
@@ -170,6 +174,14 @@ func (s State) WithWSTunnelProcess(pid int, argv []string) State {
 
 func (s State) WithAppProcess(pid int, argv []string) State {
 	s.AppProcess = &ProcessState{
+		PID:  pid,
+		Argv: append([]string(nil), argv...),
+	}
+	return s
+}
+
+func (s State) WithMonitorProcess(pid int, argv []string) State {
+	s.MonitorProcess = &ProcessState{
 		PID:  pid,
 		Argv: append([]string(nil), argv...),
 	}
