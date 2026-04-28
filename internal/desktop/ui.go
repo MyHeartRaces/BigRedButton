@@ -395,6 +395,8 @@ const indexHTML = `<!doctype html>
         ['runtime root', data.runtime.runtime_root],
         ['profile fingerprint', data.runtime.active ? data.runtime.active.profile_fingerprint : ''],
         ['interface', data.runtime.active ? data.runtime.active.wireguard_interface : ''],
+        ['dns interface', data.runtime.active && data.runtime.active.dns_applied ? data.runtime.active.dns_interface : ''],
+        ['dns servers', data.runtime.active && data.runtime.active.dns_applied ? (data.runtime.active.dns_servers || []).join(', ') : ''],
         ['isolated state', data.isolated ? data.isolated.state : ''],
         ['isolated root', data.isolated ? data.isolated.runtime_root : ''],
         ['isolated session', isolated ? isolated.session_id : ''],
