@@ -110,6 +110,19 @@ func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 	}
 }
 
+func TestUIPrimaryConnectButtonIsSystemToggle(t *testing.T) {
+	for _, want := range []string{
+		`let currentSystemState = 'Idle';`,
+		`connectButton.textContent = currentSystemState === 'Connected' || currentSystemState === 'Dirty' ? 'Disconnect' : 'Connect';`,
+		`function systemTogglePath()`,
+		`action(systemTogglePath())`,
+	} {
+		if !strings.Contains(indexHTML, want) {
+			t.Fatalf("missing %q in UI", want)
+		}
+	}
+}
+
 func TestDesktopLaunchEnvUsesAllowlist(t *testing.T) {
 	t.Setenv("DISPLAY", ":1")
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")

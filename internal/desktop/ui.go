@@ -328,6 +328,7 @@ const indexHTML = `<!doctype html>
     const isolatedStopButton = document.getElementById('isolated-stop');
     const isolatedCleanupButton = document.getElementById('isolated-cleanup');
     const isolatedRecoverButton = document.getElementById('isolated-recover');
+    let currentSystemState = 'Idle';
 
     function escapeHTML(value) {
       return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -358,6 +359,7 @@ const indexHTML = `<!doctype html>
       const response = await fetch('/api/status');
       const data = await response.json();
       const sessions = data.isolated_sessions || [];
+      currentSystemState = data.runtime && data.runtime.state ? data.runtime.state : 'Idle';
       const isolated = data.isolated && data.isolated.active ? data.isolated.active : null;
       const hasConnectedIsolatedSession = Boolean(isolated || sessions.find(session => {
         const snapshot = session.snapshot || {};
@@ -370,6 +372,7 @@ const indexHTML = `<!doctype html>
       const effectiveState = hasConnectedIsolatedSession ? 'Isolated Connected' : (hasDirtyIsolatedSession ? 'Isolated Dirty' : data.runtime.state);
       stateEl.textContent = effectiveState + ' on ' + data.os;
       stateEl.className = 'status-pill ' + (effectiveState.includes('Connected') ? 'ok' : (effectiveState.includes('Dirty') ? 'warn' : ''));
+      connectButton.textContent = currentSystemState === 'Connected' || currentSystemState === 'Dirty' ? 'Disconnect' : 'Connect';
 
       endpointEl.value = data.gui.endpoint_ip || endpointEl.value || '';
       wstunnelEl.value = data.gui.wstunnel_binary || wstunnelEl.value || '';
@@ -451,7 +454,11 @@ const indexHTML = `<!doctype html>
       }
     }
 
-    connectButton.addEventListener('click', () => action('/api/connect'));
+    function systemTogglePath() {
+      return currentSystemState === 'Connected' || currentSystemState === 'Dirty' ? '/api/disconnect' : '/api/connect';
+    }
+
+    connectButton.addEventListener('click', () => action(systemTogglePath()));
     disconnectButton.addEventListener('click', () => action('/api/disconnect'));
     isolatedStartButton.addEventListener('click', () => action('/api/isolated/start'));
     isolatedStopButton.addEventListener('click', () => action('/api/isolated/stop'));
