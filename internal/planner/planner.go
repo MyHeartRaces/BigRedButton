@@ -63,6 +63,10 @@ func Connect(config profile.Config, options Options) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
+	dnsServers, err := normalizeDNSServers(config.DNS)
+	if err != nil {
+		return Plan{}, err
+	}
 	var routeExclusions []routes.EndpointExclusion
 
 	steps := []Step{
@@ -76,6 +80,12 @@ func Connect(config profile.Config, options Options) (Plan, error) {
 			ID:                 "resolve-wstunnel-host",
 			Action:             "Resolve WSTunnel host before applying tunnel routes",
 			Details:            []string{"host=" + config.WSTunnelHost},
+			SecretMaterialFree: true,
+		},
+		{
+			ID:                 "validate-linux-prerequisites",
+			Action:             "Validate Linux system tunnel prerequisites",
+			Details:            systemPrerequisiteDetails(normalized.WSTunnelBinary, len(dnsServers) > 0),
 			SecretMaterialFree: true,
 		},
 	}
@@ -179,10 +189,6 @@ func Connect(config profile.Config, options Options) (Plan, error) {
 		},
 	)
 
-	dnsServers, err := normalizeDNSServers(config.DNS)
-	if err != nil {
-		return Plan{}, err
-	}
 	if len(dnsServers) == 0 {
 		steps = append(steps, Step{
 			ID:                 "skip-dns",
@@ -362,6 +368,18 @@ func normalizeDNSServers(raw string) ([]string, error) {
 		servers = append(servers, normalized)
 	}
 	return servers, nil
+}
+
+func systemPrerequisiteDetails(wstunnelBinary string, needsDNS bool) []string {
+	details := []string{
+		"binary=ip",
+		"binary=wg",
+		"binary=" + wstunnelBinary,
+	}
+	if needsDNS {
+		details = append(details, "binary=resolvectl")
+	}
+	return details
 }
 
 func prefixed(prefix string, values []string) []string {

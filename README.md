@@ -24,6 +24,7 @@ Implemented:
 - connect/disconnect planner
 - runtime status snapshots
 - Linux route exclusions for the tunnel gateway
+- Linux system tunnel prerequisite checks before network mutation
 - tunnel helper command builder and process executor
 - WireGuard `wg setconf` renderer and Linux executor
 - Linux system DNS adapter through `systemd-resolved` / `resolvectl`

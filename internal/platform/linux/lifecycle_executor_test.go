@@ -40,6 +40,7 @@ func TestLifecycleExecutorRunsConnectPlan(t *testing.T) {
 		ProcessRunner:  processRunner,
 		WGConfigWriter: writer,
 		RuntimeRoot:    runtimeRoot,
+		LookPath:       foundLookPath,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -120,6 +121,7 @@ func TestLifecycleExecutorRollsBackOnWireGuardFailure(t *testing.T) {
 		ProcessRunner:  processRunner,
 		WGConfigWriter: writer,
 		RuntimeRoot:    runtimeRoot,
+		LookPath:       foundLookPath,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -143,6 +145,55 @@ func TestLifecycleExecutorRollsBackOnWireGuardFailure(t *testing.T) {
 		if !strings.Contains(commands, want) {
 			t.Fatalf("missing rollback command %q in:\n%s", want, commands)
 		}
+	}
+}
+
+func TestLifecycleExecutorFailsBeforeMutationWhenPrerequisiteMissing(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	profileConfig := linuxProfile(t)
+	plan, err := planner.Connect(profileConfig, planner.Options{
+		EndpointIPs:      []string{"203.0.113.10"},
+		DefaultGateway:   "192.0.2.1",
+		DefaultInterface: "eth0",
+		RuntimeRoot:      runtimeRoot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &recordingRunner{}
+	processRunner := &lifecycleProcessRunner{}
+	executor, err := NewLifecycleExecutor(LifecycleExecutorOptions{
+		Plan:          plan,
+		Profile:       profileConfig,
+		CommandRunner: runner,
+		ProcessRunner: processRunner,
+		RuntimeRoot:   runtimeRoot,
+		LookPath: func(binary string) (string, error) {
+			if binary == "resolvectl" {
+				return "", errors.New("not found")
+			}
+			return "/usr/bin/" + binary, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := engine.New(executor).Run(context.Background(), plan)
+	if result.State != engine.StateFailedRecoverable {
+		t.Fatalf("state = %s error = %s rollback = %s", result.State, result.Error, result.RollbackError)
+	}
+	if result.FailedStepID != "validate-linux-prerequisites" {
+		t.Fatalf("failed step = %s", result.FailedStepID)
+	}
+	if !strings.Contains(result.Error, "required binary resolvectl was not found") {
+		t.Fatalf("unexpected error: %s", result.Error)
+	}
+	if len(runner.argv) != 0 {
+		t.Fatalf("expected no network commands before failed preflight, got %#v", runner.argv)
+	}
+	if len(processRunner.started) != 0 {
+		t.Fatalf("expected no started processes before failed preflight, got %#v", processRunner.started)
 	}
 }
 

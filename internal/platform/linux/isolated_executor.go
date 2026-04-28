@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -84,10 +83,7 @@ func NewIsolatedExecutor(options IsolatedExecutorOptions) (*IsolatedExecutor, er
 	if netNSConfigRoot == "" {
 		netNSConfigRoot = DefaultNetNSConfigRoot
 	}
-	lookPath := options.LookPath
-	if lookPath == nil {
-		lookPath = exec.LookPath
-	}
+	lookPath := defaultLookPath(options.LookPath)
 	return &IsolatedExecutor{
 		plan:               options.Plan,
 		profile:            options.Profile,
@@ -284,27 +280,7 @@ func (e *IsolatedExecutor) validatePrerequisites(step planner.Step) error {
 }
 
 func (e *IsolatedExecutor) validateExecutable(binary string) error {
-	binary = strings.TrimSpace(binary)
-	if binary == "" {
-		return fmt.Errorf("prerequisite binary is empty")
-	}
-	if strings.Contains(binary, "/") {
-		info, err := os.Stat(binary)
-		if err != nil {
-			return fmt.Errorf("required binary %s is not accessible: %w", binary, err)
-		}
-		if info.IsDir() {
-			return fmt.Errorf("required binary %s is a directory", binary)
-		}
-		if info.Mode()&0o111 == 0 {
-			return fmt.Errorf("required binary %s is not executable", binary)
-		}
-		return nil
-	}
-	if _, err := e.lookPath(binary); err != nil {
-		return fmt.Errorf("required binary %s was not found in PATH: %w", binary, err)
-	}
-	return nil
+	return validateExecutable(e.lookPath, binary)
 }
 
 func (e *IsolatedExecutor) createVethPair(ctx context.Context, step planner.Step) error {

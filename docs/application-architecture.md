@@ -242,16 +242,17 @@ The helper executes connect in this order:
 
 1. Parse and validate profile.
 2. Resolve WSTunnel hostname before tunnel routes are applied.
-3. Snapshot current route to each resolved WSTunnel endpoint IP.
-4. Build route exclusion plan for all resolved endpoint IPs.
-5. Reserve local runtime names and ports.
-6. Start WSTunnel client and wait until the local UDP endpoint is ready.
-7. Create/configure the WireGuard interface.
-8. Apply WireGuard address, peer, MTU and keepalive.
-9. Apply route plan for client AllowedIPs.
-10. Apply DNS plan if supported by the current platform adapter.
-11. Verify WSTunnel process is alive and WireGuard interface exists.
-12. Store runtime state and return `Connected`.
+3. Validate platform prerequisites before mutating network state.
+4. Snapshot current route to each resolved WSTunnel endpoint IP.
+5. Build route exclusion plan for all resolved endpoint IPs.
+6. Reserve local runtime names and ports.
+7. Start WSTunnel client and wait until the local UDP endpoint is ready.
+8. Create/configure the WireGuard interface.
+9. Apply WireGuard address, peer, MTU and keepalive.
+10. Apply route plan for client AllowedIPs.
+11. Apply DNS plan if supported by the current platform adapter.
+12. Verify WSTunnel process is alive and WireGuard interface exists.
+13. Store runtime state and return `Connected`.
 
 If any step fails, the engine runs rollback in reverse order for completed
 steps.

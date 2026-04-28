@@ -43,6 +43,9 @@ func TestConnectPlanWithEndpointIPs(t *testing.T) {
 	if !hasStep(plan, "start-wstunnel") {
 		t.Fatalf("missing wstunnel step: %#v", plan.Steps)
 	}
+	if !hasStep(plan, "validate-linux-prerequisites") {
+		t.Fatalf("missing Linux prerequisite step: %#v", plan.Steps)
+	}
 	if !hasStep(plan, "apply-wireguard-peer") {
 		t.Fatalf("missing wireguard peer step: %#v", plan.Steps)
 	}
@@ -61,6 +64,12 @@ func TestConnectPlanWithEndpointIPs(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(plan.Warnings, "\n"), "DNS adapter is not implemented") {
 		t.Fatalf("unexpected obsolete DNS warning: %#v", plan.Warnings)
+	}
+	prereqDetails := strings.Join(findStep(plan, "validate-linux-prerequisites").Details, "\n")
+	for _, want := range []string{"binary=ip", "binary=wg", "binary=wstunnel", "binary=resolvectl"} {
+		if !strings.Contains(prereqDetails, want) {
+			t.Fatalf("missing prerequisite detail %q: %#v", want, findStep(plan, "validate-linux-prerequisites").Details)
+		}
 	}
 	assertPlanHasNoSecret(t, plan, config.WireGuardPrivateKey)
 	assertPlanHasNoSecret(t, plan, config.ServerPublicKey)

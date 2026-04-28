@@ -17,6 +17,7 @@ type LifecycleExecutor struct {
 	wstunnel  *supervisor.WSTunnelExecutor
 	wireguard *WireGuardExecutor
 	stopper   supervisor.ProcessStopper
+	lookPath  lookPathFunc
 }
 
 type LifecycleExecutorOptions struct {
@@ -32,6 +33,7 @@ type LifecycleExecutorOptions struct {
 	WSTunnelLogLevel   string
 	WSTunnelRemoteHost string
 	WSTunnelRemotePort int
+	LookPath           func(string) (string, error)
 }
 
 func NewLifecycleExecutor(options LifecycleExecutorOptions) (*LifecycleExecutor, error) {
@@ -93,6 +95,7 @@ func NewLifecycleExecutor(options LifecycleExecutorOptions) (*LifecycleExecutor,
 		wstunnel:  wstunnelExecutor,
 		wireguard: wireGuardExecutor,
 		stopper:   stopper,
+		lookPath:  defaultLookPath(options.LookPath),
 	}, nil
 }
 
@@ -102,6 +105,9 @@ func (e *LifecycleExecutor) Apply(ctx context.Context, step planner.Step) error 
 	}
 	if isNoopLifecycleStep(step) {
 		return nil
+	}
+	if step.ID == "validate-linux-prerequisites" {
+		return e.validatePrerequisites(step)
 	}
 	if step.ID == "store-runtime-state" {
 		return e.storeRuntimeState(ctx, step)
@@ -149,6 +155,16 @@ func (e *LifecycleExecutor) Rollback(ctx context.Context, step planner.Step) err
 	}
 	if isWireGuardStep(step) {
 		return e.wireguard.Rollback(ctx, step)
+	}
+	return nil
+}
+
+func (e *LifecycleExecutor) validatePrerequisites(step planner.Step) error {
+	for _, binary := range detailValues(step, "binary") {
+		if err := validateExecutable(e.lookPath, binary); err != nil {
+			return err
+		}
+		e.route.recordRuntime(OperationApply, step.ID, "found "+binary)
 	}
 	return nil
 }
