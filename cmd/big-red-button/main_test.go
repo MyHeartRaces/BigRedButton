@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -614,6 +615,40 @@ func TestLinuxConnectRejectsDifferentActiveProfile(t *testing.T) {
 	}
 }
 
+func TestResolveEndpointIPsDeduplicatesAndSorts(t *testing.T) {
+	restore := stubLookupIPAddr(func(_ context.Context, host string) ([]net.IPAddr, error) {
+		if host != "edge.example.com" {
+			t.Fatalf("host = %s", host)
+		}
+		return []net.IPAddr{
+			{IP: net.ParseIP("203.0.113.20")},
+			{IP: net.ParseIP("203.0.113.10")},
+			{IP: net.ParseIP("203.0.113.20")},
+		}, nil
+	})
+	defer restore()
+
+	got, err := resolveEndpointIPs(context.Background(), " edge.example.com ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "203.0.113.10,203.0.113.20" {
+		t.Fatalf("endpoint IPs = %#v", got)
+	}
+}
+
+func TestResolveEndpointIPsRejectsEmptyResult(t *testing.T) {
+	restore := stubLookupIPAddr(func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{}}, nil
+	})
+	defer restore()
+
+	_, err := resolveEndpointIPs(context.Background(), "edge.example.com")
+	if err == nil || !strings.Contains(err.Error(), "did not resolve") {
+		t.Fatalf("expected empty resolve error, got %v", err)
+	}
+}
+
 func TestLinuxIsolatedAppRequiresConfirmation(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -738,6 +773,14 @@ func forceGOOS(value string) func() {
 	currentGOOS = value
 	return func() {
 		currentGOOS = previous
+	}
+}
+
+func stubLookupIPAddr(fn func(context.Context, string) ([]net.IPAddr, error)) func() {
+	previous := lookupIPAddr
+	lookupIPAddr = fn
+	return func() {
+		lookupIPAddr = previous
 	}
 }
 

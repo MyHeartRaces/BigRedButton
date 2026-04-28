@@ -7,10 +7,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	userpkg "os/user"
 	"path/filepath"
 	stdruntime "runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,6 +26,7 @@ import (
 )
 
 var currentGOOS = stdruntime.GOOS
+var lookupIPAddr = net.DefaultResolver.LookupIPAddr
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -594,8 +597,23 @@ func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		return code
 	}
 	if len(plan.EndpointIPs) == 0 {
-		fmt.Fprintln(stderr, "linux-connect requires at least one -endpoint-ip for the WSTunnel server")
-		return 2
+		endpointIPs, err := resolveEndpointIPs(context.Background(), config.WSTunnelHost)
+		if err != nil {
+			fmt.Fprintf(stderr, "resolve WSTunnel endpoint: %v\n", err)
+			return 1
+		}
+		plan, err = planner.Connect(config, planner.Options{
+			EndpointIPs:        endpointIPs,
+			DefaultGateway:     *options.defaultGateway,
+			DefaultInterface:   *options.defaultInterface,
+			WSTunnelBinary:     *options.wstunnelBinary,
+			WireGuardInterface: *options.wireguardInterface,
+			RuntimeRoot:        *options.runtimeRoot,
+		})
+		if err != nil {
+			fmt.Fprintf(stderr, "build connect plan: %v\n", err)
+			return 1
+		}
 	}
 	executor, err := platformlinux.NewLifecycleExecutor(platformlinux.LifecycleExecutorOptions{
 		Plan:           plan,
@@ -672,6 +690,35 @@ func handleExistingLinuxConnection(plan planner.Plan, jsonOutput bool, stdout io
 		printLinuxLifecycle(output, stdout)
 	}
 	return true, code
+}
+
+func resolveEndpointIPs(ctx context.Context, host string) ([]string, error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return nil, fmt.Errorf("host is required")
+	}
+	addrs, err := lookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]struct{}{}
+	var out []string
+	for _, addr := range addrs {
+		ip := strings.TrimSpace(addr.IP.String())
+		if ip == "" || ip == "<nil>" {
+			continue
+		}
+		if _, ok := seen[ip]; ok {
+			continue
+		}
+		seen[ip] = struct{}{}
+		out = append(out, ip)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("host %s did not resolve to an IP address", host)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func linuxIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {

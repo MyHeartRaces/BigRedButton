@@ -51,19 +51,14 @@ func TestSplitCommandLineRejectsUnterminatedQuote(t *testing.T) {
 	}
 }
 
-func TestBuildLinuxConnectArgsRequiresEndpointOnlyWhenIdle(t *testing.T) {
+func TestBuildLinuxConnectArgsMakesEndpointOptional(t *testing.T) {
 	state := guiState{ProfilePath: "/tmp/profile.json"}
-	_, err := buildLinuxConnectArgs(state, status.Snapshot{State: status.StateIdle})
-	if err == nil || !strings.Contains(err.Error(), "endpoint IP is required") {
-		t.Fatalf("expected endpoint error, got %v", err)
-	}
-
-	args, err := buildLinuxConnectArgs(state, status.Snapshot{State: status.StateConnected})
+	args, err := buildLinuxConnectArgs(state, status.Snapshot{State: status.StateIdle})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(strings.Join(args, " "), "-endpoint-ip") {
-		t.Fatalf("already-connected args should not require endpoint: %#v", args)
+	if strings.Join(args, " ") != "linux-connect -yes /tmp/profile.json" {
+		t.Fatalf("endpoint should be optional: %#v", args)
 	}
 
 	state.EndpointIP = "203.0.113.10"

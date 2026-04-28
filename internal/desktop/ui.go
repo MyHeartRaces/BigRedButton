@@ -269,8 +269,8 @@ const indexHTML = `<!doctype html>
       <section>
         <h2>Connection</h2>
         <label>
-          Tunnel gateway IP
-          <input id="endpoint-ip" autocomplete="off" placeholder="203.0.113.10">
+          Tunnel gateway IP override
+          <input id="endpoint-ip" autocomplete="off" placeholder="optional resolved IP">
         </label>
         <label>
           Tunnel helper binary

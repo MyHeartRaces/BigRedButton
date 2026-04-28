@@ -169,10 +169,13 @@ These commands change networking state. Run them only on the test machine.
 ```bash
 sudo big-red-button linux-connect \
   -yes \
-  -endpoint-ip <resolved-tunnel-gateway-ip> \
   -wstunnel-binary /usr/bin/wstunnel \
   /path/to/profile.json
 ```
+
+`linux-connect` resolves the tunnel gateway host from the profile before it
+changes routes. Use `-endpoint-ip <ip>` only when you need to override DNS with
+a known resolved endpoint.
 
 Disconnect:
 

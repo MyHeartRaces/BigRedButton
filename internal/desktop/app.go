@@ -530,15 +530,12 @@ func decodeAction(reader io.Reader) (actionRequest, error) {
 	return request, nil
 }
 
-func buildLinuxConnectArgs(state guiState, runtime status.Snapshot) ([]string, error) {
+func buildLinuxConnectArgs(state guiState, _ status.Snapshot) ([]string, error) {
 	profilePath := strings.TrimSpace(state.ProfilePath)
 	if profilePath == "" {
 		return nil, errors.New("upload a profile first")
 	}
 	endpointIP := strings.TrimSpace(state.EndpointIP)
-	if endpointIP == "" && runtime.State == status.StateIdle {
-		return nil, errors.New("endpoint IP is required")
-	}
 	args := []string{"linux-connect", "-yes"}
 	if endpointIP != "" {
 		args = append(args, "-endpoint-ip", endpointIP)
