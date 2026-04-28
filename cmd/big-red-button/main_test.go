@@ -419,6 +419,40 @@ func TestLinuxDryRunConnectCommand(t *testing.T) {
 	}
 }
 
+func TestLinuxDryRunConnectCommandResolvesEndpointWhenMissing(t *testing.T) {
+	restore := stubLookupIPAddr(func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		if host != "edge.example.com" {
+			t.Fatalf("host = %s", host)
+		}
+		return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
+	})
+	defer restore()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"linux-dry-run-connect",
+		"-default-gateway", "192.0.2.1",
+		"-default-interface", "eth0",
+		"../../testdata/profiles/valid-wgws.json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"endpoint IPs: [203.0.113.10]",
+		"ip -4 route get 203.0.113.10",
+		"ip -4 route replace 203.0.113.10/32 via 192.0.2.1 dev eth0",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "endpoint IPs were not provided") {
+		t.Fatalf("dry-run should resolve endpoint IPs before planning: %s", out)
+	}
+}
+
 func TestLinuxDryRunConnectCommandFailsWithoutConcreteRouteExclusion(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 

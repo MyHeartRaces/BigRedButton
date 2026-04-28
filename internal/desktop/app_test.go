@@ -3,8 +3,6 @@ package desktop
 import (
 	"strings"
 	"testing"
-
-	"github.com/MyHeartRaces/BigRedButton/internal/status"
 )
 
 func TestDecodeActionTrimsValues(t *testing.T) {
@@ -53,7 +51,7 @@ func TestSplitCommandLineRejectsUnterminatedQuote(t *testing.T) {
 
 func TestBuildLinuxConnectArgsMakesEndpointOptional(t *testing.T) {
 	state := guiState{ProfilePath: "/tmp/profile.json"}
-	args, err := buildLinuxConnectArgs(state, status.Snapshot{State: status.StateIdle})
+	args, err := buildLinuxConnectArgs(state)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,12 +60,28 @@ func TestBuildLinuxConnectArgsMakesEndpointOptional(t *testing.T) {
 	}
 
 	state.EndpointIP = "203.0.113.10"
-	args, err = buildLinuxConnectArgs(state, status.Snapshot{State: status.StateIdle})
+	args, err = buildLinuxConnectArgs(state)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(strings.Join(args, " "), "-endpoint-ip 203.0.113.10") {
 		t.Fatalf("endpoint args missing: %#v", args)
+	}
+}
+
+func TestBuildDiagnosticsArgsIncludesProfileWhenSaved(t *testing.T) {
+	args := buildDiagnosticsArgs(guiState{ProfilePath: " /tmp/profile.json "})
+	got := strings.Join(args, " ")
+	want := "diagnostics -runtime-root /run/big-red-button -profile /tmp/profile.json"
+	if got != want {
+		t.Fatalf("args = %q want %q", got, want)
+	}
+
+	args = buildDiagnosticsArgs(guiState{})
+	got = strings.Join(args, " ")
+	want = "diagnostics -runtime-root /run/big-red-button"
+	if got != want {
+		t.Fatalf("args = %q want %q", got, want)
 	}
 }
 

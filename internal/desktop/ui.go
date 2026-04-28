@@ -279,6 +279,7 @@ const indexHTML = `<!doctype html>
         <div class="row">
           <button class="primary" id="connect" type="button">Connect</button>
           <button id="disconnect" type="button">Disconnect</button>
+          <button id="diagnostics" type="button">Diagnostics</button>
           <button id="refresh" type="button">Refresh</button>
         </div>
       </section>
@@ -324,6 +325,7 @@ const indexHTML = `<!doctype html>
     const isolatedCommandEl = document.getElementById('isolated-command');
     const connectButton = document.getElementById('connect');
     const disconnectButton = document.getElementById('disconnect');
+    const diagnosticsButton = document.getElementById('diagnostics');
     const isolatedStartButton = document.getElementById('isolated-start');
     const isolatedStopButton = document.getElementById('isolated-stop');
     const isolatedCleanupButton = document.getElementById('isolated-cleanup');
@@ -349,6 +351,7 @@ const indexHTML = `<!doctype html>
     function setBusy(busy) {
       connectButton.disabled = busy;
       disconnectButton.disabled = busy;
+      diagnosticsButton.disabled = busy;
       isolatedStartButton.disabled = busy;
       isolatedStopButton.disabled = busy;
       isolatedCleanupButton.disabled = busy;
@@ -426,8 +429,9 @@ const indexHTML = `<!doctype html>
       try {
         const response = await fetch('/api/profile', { method: 'POST', body: form });
         const data = await response.json();
-        if (!response.ok) outputEl.textContent = data.error || 'profile upload failed';
+        const message = !response.ok ? data.error || 'profile upload failed' : '';
         await refresh();
+        if (message) outputEl.textContent = message;
       } finally {
         setBusy(false);
       }
@@ -447,8 +451,9 @@ const indexHTML = `<!doctype html>
           })
         });
         const data = await response.json();
-        outputEl.textContent = data.output || data.error || '';
+        const message = data.output || data.error || '';
         await refresh();
+        if (!response.ok || data.error) outputEl.textContent = message;
       } finally {
         setBusy(false);
       }
@@ -460,6 +465,7 @@ const indexHTML = `<!doctype html>
 
     connectButton.addEventListener('click', () => action(systemTogglePath()));
     disconnectButton.addEventListener('click', () => action('/api/disconnect'));
+    diagnosticsButton.addEventListener('click', () => action('/api/diagnostics'));
     isolatedStartButton.addEventListener('click', () => action('/api/isolated/start'));
     isolatedStopButton.addEventListener('click', () => action('/api/isolated/stop'));
     isolatedCleanupButton.addEventListener('click', () => action('/api/isolated/cleanup'));

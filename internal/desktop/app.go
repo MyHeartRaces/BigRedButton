@@ -102,6 +102,7 @@ func Run(ctx context.Context, options Options) error {
 	mux.HandleFunc("/api/profile", a.profile)
 	mux.HandleFunc("/api/connect", a.connect)
 	mux.HandleFunc("/api/disconnect", a.disconnect)
+	mux.HandleFunc("/api/diagnostics", a.diagnostics)
 	mux.HandleFunc("/api/isolated/start", a.isolatedStart)
 	mux.HandleFunc("/api/isolated/stop", a.isolatedStop)
 	mux.HandleFunc("/api/isolated/cleanup", a.isolatedCleanup)
@@ -243,7 +244,7 @@ func (a *app) connect(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "upload a profile first"})
 		return
 	}
-	args, err := buildLinuxConnectArgs(state, status.FromStore(r.Context(), truntime.Store{Root: planner.DefaultRuntimeRoot}))
+	args, err := buildLinuxConnectArgs(state)
 	if err != nil {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
 		return
@@ -269,6 +270,20 @@ func (a *app) disconnect(w http.ResponseWriter, r *http.Request) {
 	state := a.loadState()
 	response := a.runCLI(r.Context(), "disconnect", []string{"linux-disconnect", "-yes"})
 	state.LastCommand = "disconnect"
+	state.LastCommandTime = time.Now().Format(time.RFC3339)
+	state.LastOutput = response.Output
+	_ = a.saveState(state)
+	writeJSON(w, response)
+}
+
+func (a *app) diagnostics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	state := a.loadState()
+	response := a.runCLIUnprivileged(r.Context(), "diagnostics", buildDiagnosticsArgs(state))
+	state.LastCommand = "diagnostics"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
 	_ = a.saveState(state)
@@ -450,11 +465,19 @@ func (a *app) statusPayload(ctx context.Context) statusResponse {
 }
 
 func (a *app) runCLI(ctx context.Context, action string, args []string) actionResponse {
+	return a.runCLICommand(ctx, action, args, stdruntime.GOOS == "linux")
+}
+
+func (a *app) runCLIUnprivileged(ctx context.Context, action string, args []string) actionResponse {
+	return a.runCLICommand(ctx, action, args, false)
+}
+
+func (a *app) runCLICommand(ctx context.Context, action string, args []string, privileged bool) actionResponse {
 	if strings.TrimSpace(a.cliPath) == "" {
 		return actionResponse{Error: "big-red-button CLI was not found"}
 	}
 	command := append([]string{a.cliPath}, args...)
-	if stdruntime.GOOS == "linux" {
+	if privileged && stdruntime.GOOS == "linux" {
 		if pkexec, err := exec.LookPath("pkexec"); err == nil {
 			command = append([]string{pkexec}, command...)
 		}
@@ -525,7 +548,7 @@ func decodeAction(reader io.Reader) (actionRequest, error) {
 	return request, nil
 }
 
-func buildLinuxConnectArgs(state guiState, _ status.Snapshot) ([]string, error) {
+func buildLinuxConnectArgs(state guiState) ([]string, error) {
 	profilePath := strings.TrimSpace(state.ProfilePath)
 	if profilePath == "" {
 		return nil, errors.New("upload a profile first")
@@ -540,6 +563,14 @@ func buildLinuxConnectArgs(state guiState, _ status.Snapshot) ([]string, error) 
 	}
 	args = append(args, profilePath)
 	return args, nil
+}
+
+func buildDiagnosticsArgs(state guiState) []string {
+	args := []string{"diagnostics", "-runtime-root", planner.DefaultRuntimeRoot}
+	if profilePath := strings.TrimSpace(state.ProfilePath); profilePath != "" {
+		args = append(args, "-profile", profilePath)
+	}
+	return args
 }
 
 func clearIsolatedSessionOnSuccess(state guiState, response actionResponse) guiState {

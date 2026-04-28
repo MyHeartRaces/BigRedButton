@@ -161,14 +161,7 @@ func planConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		printProfileError(err, stderr, *jsonOutput, stdout)
 		return 1
 	}
-	plan, err := planner.Connect(config, planner.Options{
-		EndpointIPs:        csvOption(*options.endpointIPs),
-		DefaultGateway:     *options.defaultGateway,
-		DefaultInterface:   *options.defaultInterface,
-		WSTunnelBinary:     *options.wstunnelBinary,
-		WireGuardInterface: *options.wireguardInterface,
-		RuntimeRoot:        *options.runtimeRoot,
-	})
+	plan, err := buildConnectPlan(config, options, csvOption(*options.endpointIPs))
 	if err != nil {
 		fmt.Fprintf(stderr, "build connect plan: %v\n", err)
 		return 1
@@ -413,14 +406,15 @@ func linuxDryRunConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		printProfileError(err, stderr, *jsonOutput, stdout)
 		return 1
 	}
-	plan, err := planner.Connect(config, planner.Options{
-		EndpointIPs:        csvOption(*options.endpointIPs),
-		DefaultGateway:     *options.defaultGateway,
-		DefaultInterface:   *options.defaultInterface,
-		WSTunnelBinary:     *options.wstunnelBinary,
-		WireGuardInterface: *options.wireguardInterface,
-		RuntimeRoot:        *options.runtimeRoot,
-	})
+	endpointIPs := csvOption(*options.endpointIPs)
+	if len(endpointIPs) == 0 {
+		endpointIPs, err = resolveEndpointIPs(context.Background(), config.WSTunnelHost)
+		if err != nil {
+			fmt.Fprintf(stderr, "resolve WSTunnel endpoint: %v\n", err)
+			return 1
+		}
+	}
+	plan, err := buildConnectPlan(config, options, endpointIPs)
 	if err != nil {
 		fmt.Fprintf(stderr, "build connect plan: %v\n", err)
 		return 1
@@ -581,14 +575,7 @@ func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 		printProfileError(err, stderr, *jsonOutput, stdout)
 		return 1
 	}
-	plan, err := planner.Connect(config, planner.Options{
-		EndpointIPs:        csvOption(*options.endpointIPs),
-		DefaultGateway:     *options.defaultGateway,
-		DefaultInterface:   *options.defaultInterface,
-		WSTunnelBinary:     *options.wstunnelBinary,
-		WireGuardInterface: *options.wireguardInterface,
-		RuntimeRoot:        *options.runtimeRoot,
-	})
+	plan, err := buildConnectPlan(config, options, csvOption(*options.endpointIPs))
 	if err != nil {
 		fmt.Fprintf(stderr, "build connect plan: %v\n", err)
 		return 1
@@ -602,14 +589,7 @@ func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "resolve WSTunnel endpoint: %v\n", err)
 			return 1
 		}
-		plan, err = planner.Connect(config, planner.Options{
-			EndpointIPs:        endpointIPs,
-			DefaultGateway:     *options.defaultGateway,
-			DefaultInterface:   *options.defaultInterface,
-			WSTunnelBinary:     *options.wstunnelBinary,
-			WireGuardInterface: *options.wireguardInterface,
-			RuntimeRoot:        *options.runtimeRoot,
-		})
+		plan, err = buildConnectPlan(config, options, endpointIPs)
 		if err != nil {
 			fmt.Fprintf(stderr, "build connect plan: %v\n", err)
 			return 1
@@ -1057,6 +1037,17 @@ func writeJSON(w io.Writer, payload any) {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	_ = encoder.Encode(payload)
+}
+
+func buildConnectPlan(config profile.Config, options connectFlagValues, endpointIPs []string) (planner.Plan, error) {
+	return planner.Connect(config, planner.Options{
+		EndpointIPs:        endpointIPs,
+		DefaultGateway:     *options.defaultGateway,
+		DefaultInterface:   *options.defaultInterface,
+		WSTunnelBinary:     *options.wstunnelBinary,
+		WireGuardInterface: *options.wireguardInterface,
+		RuntimeRoot:        *options.runtimeRoot,
+	})
 }
 
 type connectFlagValues struct {
