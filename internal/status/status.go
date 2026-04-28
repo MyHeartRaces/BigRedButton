@@ -11,6 +11,7 @@ import (
 
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
+	"github.com/MyHeartRaces/BigRedButton/internal/supervisor"
 )
 
 type State string
@@ -91,13 +92,12 @@ func markMissingProcesses(snapshot *Snapshot) {
 	}
 	var missing []string
 	if snapshot.Active.Mode == planner.IsolatedAppTunnelKind {
-		if process := snapshot.Active.AppProcess; process != nil && !linuxPIDExists(process.PID) {
-			missing = append(missing, "app pid "+strconv.Itoa(process.PID))
+		if process := snapshot.Active.AppProcess; process != nil {
+			missing = appendProcessProblem(missing, "app", process)
 		}
 	}
-	if snapshot.Active.WSTunnelProcess != nil && !linuxPIDExists(snapshot.Active.WSTunnelProcess.PID) {
-		process := snapshot.Active.WSTunnelProcess
-		missing = append(missing, "wstunnel pid "+strconv.Itoa(process.PID))
+	if process := snapshot.Active.WSTunnelProcess; process != nil {
+		missing = appendProcessProblem(missing, "wstunnel", process)
 	}
 	if len(missing) == 0 {
 		return
@@ -108,6 +108,19 @@ func markMissingProcesses(snapshot *Snapshot) {
 		return
 	}
 	snapshot.Error = "system tunnel process is not running: " + strings.Join(missing, ", ")
+}
+
+func appendProcessProblem(missing []string, label string, process *truntime.ProcessState) []string {
+	if process == nil {
+		return missing
+	}
+	if !linuxPIDExists(process.PID) {
+		return append(missing, label+" pid "+strconv.Itoa(process.PID))
+	}
+	if !supervisor.PIDArgvMatches(process.PID, process.Argv) {
+		return append(missing, label+" pid "+strconv.Itoa(process.PID)+" argv mismatch")
+	}
+	return missing
 }
 
 func linuxPIDExists(pid int) bool {

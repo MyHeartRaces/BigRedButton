@@ -116,6 +116,30 @@ func TestFromStoreDirtyWhenLinuxSystemWSTunnelProcessIsMissing(t *testing.T) {
 	}
 }
 
+func TestFromStoreDirtyWhenLinuxProcessArgvDiffers(t *testing.T) {
+	if stdruntime.GOOS != "linux" {
+		t.Skip("Linux /proc process health check")
+	}
+	store := truntime.Store{Root: t.TempDir()}
+	err := store.Save(context.Background(), truntime.State{
+		Version:            truntime.StateVersion,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "tg-test",
+	}.WithWSTunnelProcess(os.Getpid(), []string{"definitely-not-this-process"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := FromStore(context.Background(), store)
+
+	if snapshot.State != StateDirty {
+		t.Fatalf("state = %s", snapshot.State)
+	}
+	if !strings.Contains(snapshot.Error, "argv mismatch") {
+		t.Fatalf("error = %s", snapshot.Error)
+	}
+}
+
 func TestIsolatedSessions(t *testing.T) {
 	runtimeRoot := t.TempDir()
 	sessionID := "123e4567-e89b-12d3-a456-426614174000"
