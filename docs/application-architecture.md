@@ -172,6 +172,8 @@ Current implementation slice:
 - `big-red-buttond` listens on the Unix socket.
 - `/v1/health`, `/v1/status` and `/v1/diagnostics` are read-only JSON
   endpoints.
+- The Arch Linux package installs `big-red-buttond.service` as the systemd
+  entrypoint for this helper.
 - `big-red-button daemon-status` can query the daemon over the same socket for
   smoke testing and scripted diagnostics.
 - Mutating operations still use the guarded CLI path through `pkexec`.

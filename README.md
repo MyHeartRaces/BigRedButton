@@ -149,6 +149,7 @@ The package installs:
 - `/usr/bin/big-red-button`
 - `/usr/bin/big-red-button-gui`
 - `/usr/bin/big-red-buttond`
+- `/usr/lib/systemd/system/big-red-buttond.service`
 - `/usr/share/doc/big-red-button/linux-smoke.sh`
 - `/usr/share/applications/big-red-button.desktop`
 - `/usr/share/icons/hicolor/scalable/apps/big-red-button.svg`
@@ -164,7 +165,7 @@ The PKGBUILD is in `packaging/arch/PKGBUILD`.
 domain socket and exposes JSON endpoints for health, status and diagnostics:
 
 ```bash
-sudo big-red-buttond
+sudo systemctl start big-red-buttond.service
 sudo big-red-button daemon-status
 curl --unix-socket /run/big-red-button/launcher.sock \
   http://big-red-button/v1/status

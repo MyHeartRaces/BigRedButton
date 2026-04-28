@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/MyHeartRaces/BigRedButton/internal/buildinfo"
 	"github.com/MyHeartRaces/BigRedButton/internal/daemon"
@@ -33,7 +34,7 @@ func run(args []string) int {
 		return 2
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	handler := daemon.NewHandler(daemon.Options{RuntimeRoot: *runtimeRoot})
 	if err := daemon.ServeUnix(ctx, *socketPath, handler); err != nil {

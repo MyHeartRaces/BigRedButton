@@ -1,0 +1,14 @@
+[Unit]
+Description=Big Red Button privileged helper daemon
+Documentation=https://github.com/MyHeartRaces/BigRedButton
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/big-red-buttond
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

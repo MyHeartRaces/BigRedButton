@@ -51,4 +51,5 @@ package() {
   install -Dm644 "packaging/linux/${pkgname}.desktop" "${pkgdir}/usr/share/applications/${pkgname}.desktop"
   install -Dm644 "packaging/assets/${pkgname}.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${pkgname}.svg"
   install -Dm644 "packaging/linux/com.myheartraces.bigredbutton.policy" "${pkgdir}/usr/share/polkit-1/actions/com.myheartraces.bigredbutton.policy"
+  install -Dm644 "packaging/linux/${pkgname}d.service" "${pkgdir}/usr/lib/systemd/system/${pkgname}d.service"
 }
