@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/MyHeartRaces/BigRedButton/internal/buildinfo"
+	"github.com/MyHeartRaces/BigRedButton/internal/daemon"
 	"github.com/MyHeartRaces/BigRedButton/internal/engine"
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 	platformlinux "github.com/MyHeartRaces/BigRedButton/internal/platform/linux"
@@ -65,6 +66,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return planDisconnect(args[1:], stdout, stderr)
 	case "status":
 		return printStatus(args[1:], stdout, stderr)
+	case "daemon-status":
+		return printDaemonStatus(args[1:], stdout, stderr)
 	case "isolated-status":
 		return printIsolatedStatus(args[1:], stdout, stderr)
 	case "isolated-sessions":
@@ -302,6 +305,47 @@ func printStatus(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 	printStatusSnapshot(stdout, snapshot)
 	if snapshot.Error != "" {
+		return 1
+	}
+	return 0
+}
+
+func printDaemonStatus(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("daemon-status", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	socketPath := fs.String("socket", daemon.DefaultSocketPath, "daemon Unix domain socket path")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button daemon-status [-json] [-socket path]")
+		return 2
+	}
+
+	response, err := daemon.NewClient(*socketPath).Status(context.Background())
+	if err != nil {
+		if *jsonOutput {
+			writeJSON(stdout, map[string]string{"error": err.Error()})
+		} else {
+			fmt.Fprintf(stderr, "daemon status: %v\n", err)
+		}
+		return 1
+	}
+	if *jsonOutput {
+		writeJSON(stdout, response)
+		return 0
+	}
+	version := strings.TrimSpace(response.Version.Version)
+	if version == "" {
+		version = "dev"
+	}
+	fmt.Fprintf(stdout, "daemon version: %s\n", version)
+	fmt.Fprintf(stdout, "daemon runtime root: %s\n", response.RuntimeRoot)
+	printStatusSnapshot(stdout, response.Runtime)
+	printIsolatedSessionList(stdout, response.IsolatedSessions, response.RuntimeRoot)
+	if response.Error != "" {
+		fmt.Fprintf(stdout, "error: %s\n", response.Error)
 		return 1
 	}
 	return 0
@@ -2480,6 +2524,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  plan-isolated-cleanup [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  plan-disconnect [-json]")
 	fmt.Fprintln(w, "  status [-json] [-runtime-root path]")
+	fmt.Fprintln(w, "  daemon-status [-json] [-socket path]")
 	fmt.Fprintln(w, "  isolated-status [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  isolated-sessions [-json] [-runtime-root path]")
 	fmt.Fprintln(w, "  diagnostics [-json] [-runtime-root path] [-profile profile.json] [-wstunnel-binary path]")

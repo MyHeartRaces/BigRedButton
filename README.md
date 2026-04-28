@@ -165,6 +165,7 @@ domain socket and exposes JSON endpoints for health, status and diagnostics:
 
 ```bash
 sudo big-red-buttond
+sudo big-red-button daemon-status
 curl --unix-socket /run/big-red-button/launcher.sock \
   http://big-red-button/v1/status
 ```

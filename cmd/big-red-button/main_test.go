@@ -11,10 +11,12 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	stdruntime "runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/MyHeartRaces/BigRedButton/internal/daemon"
 	"github.com/MyHeartRaces/BigRedButton/internal/engine"
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 	platformlinux "github.com/MyHeartRaces/BigRedButton/internal/platform/linux"
@@ -277,6 +279,56 @@ func TestStatusCommandConnected(t *testing.T) {
 	out := stdout.String()
 	if !strings.Contains(out, "state: Connected") || !strings.Contains(out, "profile fingerprint: abc123") {
 		t.Fatalf("expected connected status, got: %s", out)
+	}
+}
+
+func TestDaemonStatusCommand(t *testing.T) {
+	if stdruntime.GOOS == "windows" {
+		t.Skip("Unix socket daemon transport is not available on Windows")
+	}
+	runtimeRoot := t.TempDir()
+	store := truntime.Store{Root: runtimeRoot}
+	err := store.Save(context.Background(), truntime.State{
+		Version:            truntime.StateVersion,
+		ProfileFingerprint: "abc123",
+		WireGuardInterface: "tg-test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	socketPath := filepath.Join(t.TempDir(), "launcher.sock")
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- daemon.ServeUnix(ctx, socketPath, daemon.NewHandler(daemon.Options{RuntimeRoot: runtimeRoot}))
+	}()
+	waitForDaemonSocket(t, socketPath)
+	defer func() {
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("daemon did not stop")
+		}
+	}()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"daemon-status", "-socket", socketPath}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"daemon runtime root: " + runtimeRoot,
+		"state: Connected",
+		"profile fingerprint: abc123",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
 	}
 }
 
@@ -1249,6 +1301,20 @@ func TestLinuxDisconnectNoProfileIsIdleWhenRuntimeMissing(t *testing.T) {
 	if !strings.Contains(out, "engine state: Idle") || !strings.Contains(out, "no runtime state at") {
 		t.Fatalf("expected idle disconnect without profile, got: %s", out)
 	}
+}
+
+func waitForDaemonSocket(t *testing.T, socketPath string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		conn, err := net.Dial("unix", socketPath)
+		if err == nil {
+			_ = conn.Close()
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("socket was not ready: %s", socketPath)
 }
 
 func forceGOOS(value string) func() {

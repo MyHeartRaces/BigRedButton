@@ -80,6 +80,39 @@ func TestServeUnix(t *testing.T) {
 	}
 }
 
+func TestClientStatus(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix socket daemon transport is not available on Windows")
+	}
+	socketPath := filepath.Join(t.TempDir(), "launcher.sock")
+	runtimeRoot := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- ServeUnix(ctx, socketPath, NewHandler(Options{RuntimeRoot: runtimeRoot}))
+	}()
+	waitForUnixSocket(t, socketPath)
+	defer func() {
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("daemon did not stop")
+		}
+	}()
+
+	response, err := NewClient(socketPath).Status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.RuntimeRoot != runtimeRoot || response.Runtime.State != "Idle" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
 func waitForUnixSocket(t *testing.T, socketPath string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
