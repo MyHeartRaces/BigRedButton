@@ -369,6 +369,7 @@ func (a *app) isolatedStop(w http.ResponseWriter, r *http.Request) {
 	state.LastCommand = "isolated-stop"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
+	state = clearIsolatedSessionOnSuccess(state, response)
 	_ = a.saveState(state)
 	writeJSON(w, response)
 }
@@ -399,6 +400,7 @@ func (a *app) isolatedCleanup(w http.ResponseWriter, r *http.Request) {
 	state.LastCommand = "isolated-cleanup"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
+	state = clearIsolatedSessionOnSuccess(state, response)
 	_ = a.saveState(state)
 	writeJSON(w, response)
 }
@@ -417,6 +419,7 @@ func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
 	state.LastCommand = "isolated-recover"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
+	state = clearIsolatedSessionOnSuccess(state, response)
 	_ = a.saveState(state)
 	writeJSON(w, response)
 }
@@ -545,6 +548,13 @@ func buildLinuxConnectArgs(state guiState, runtime status.Snapshot) ([]string, e
 	}
 	args = append(args, profilePath)
 	return args, nil
+}
+
+func clearIsolatedSessionOnSuccess(state guiState, response actionResponse) guiState {
+	if response.OK {
+		state.IsolatedSession = ""
+	}
+	return state
 }
 
 func desktopLaunchEnv() []string {

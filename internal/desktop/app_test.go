@@ -76,6 +76,19 @@ func TestBuildLinuxConnectArgsRequiresEndpointOnlyWhenIdle(t *testing.T) {
 	}
 }
 
+func TestClearIsolatedSessionOnSuccess(t *testing.T) {
+	state := guiState{IsolatedSession: "123e4567-e89b-12d3-a456-426614174000"}
+	cleared := clearIsolatedSessionOnSuccess(state, actionResponse{OK: true})
+	if cleared.IsolatedSession != "" {
+		t.Fatalf("expected successful lifecycle to clear session, got %#v", cleared)
+	}
+
+	kept := clearIsolatedSessionOnSuccess(state, actionResponse{OK: false})
+	if kept.IsolatedSession != state.IsolatedSession {
+		t.Fatalf("expected failed lifecycle to keep session, got %#v", kept)
+	}
+}
+
 func TestNewUUIDShape(t *testing.T) {
 	value, err := newUUID()
 	if err != nil {
