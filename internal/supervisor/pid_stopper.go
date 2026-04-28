@@ -87,6 +87,10 @@ func isProcessAlreadyDone(err error) bool {
 	return errors.As(err, &errno) && errno == syscall.ESRCH
 }
 
+func PIDExists(pid int) bool {
+	return pidExists(pid)
+}
+
 func pidExists(pid int) bool {
 	if pid < 1 {
 		return false

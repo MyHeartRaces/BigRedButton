@@ -221,7 +221,11 @@ The repository currently includes the first Linux implementation slice:
   app launch.
 - `linux-isolated-app -yes` executes the guarded Linux session lifecycle.
   It accepts repeatable `-app-env KEY=value` for allowlisted desktop/session
-  environment forwarding, and the GUI passes those values automatically.
+  environment forwarding, and the GUI passes those values automatically. It
+  starts a background cleanup monitor by default; pass
+  `-cleanup-on-exit=false` only for manual lifecycle testing.
+- `linux-monitor-isolated-app -yes` waits for the saved isolated app PID to
+  exit, then runs the normal isolated stop lifecycle for the same session.
 - `linux-stop-isolated-app -yes` stops launcher-owned app/WSTunnel processes,
   enumerates remaining namespace PIDs with `ip netns pids`, removes namespace
   routes, flushes namespace firewall rules, removes namespace DNS, deletes the
@@ -242,6 +246,7 @@ The repository currently includes the first Linux implementation slice:
   connected.
 
 This is still early helper-level functionality. The GUI can start, stop and
-best-effort clean up a Linux isolated session through the CLI, but automatic
-crash recovery on next startup and the final privileged daemon/IPC boundary are
-not complete.
+best-effort clean up a Linux isolated session through the CLI, and normal app
+exit now triggers monitor-driven cleanup. Unattended startup recovery for
+sessions whose monitor is also gone, plus the final privileged daemon/IPC
+boundary, are not complete.

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,8 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MyHeartRaces/BigRedButton/internal/engine"
+	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 	platformlinux "github.com/MyHeartRaces/BigRedButton/internal/platform/linux"
 	"github.com/MyHeartRaces/BigRedButton/internal/profile"
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
@@ -1035,6 +1038,69 @@ func TestLinuxRecoverIsolatedSessionsRequiresConfirmation(t *testing.T) {
 	}
 }
 
+func TestLinuxMonitorIsolatedAppRequiresConfirmation(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run([]string{
+		"linux-monitor-isolated-app",
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+	}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "requires -yes") {
+		t.Fatalf("expected confirmation error, got: %s", stderr.String())
+	}
+}
+
+func TestWaitForIsolatedAppExitMissingRuntimeState(t *testing.T) {
+	store := truntime.Store{Root: filepath.Join(t.TempDir(), "isolated", "123e4567-e89b-12d3-a456-426614174000")}
+
+	got, err := waitForIsolatedAppExit(context.Background(), store, time.Millisecond, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Reason != "runtime state missing" {
+		t.Fatalf("monitor state = %#v", got)
+	}
+}
+
+func TestWaitForIsolatedAppExitWhenPIDIsGone(t *testing.T) {
+	restore := stubMonitorPIDExists(func(int) bool { return false })
+	defer restore()
+	store := truntime.Store{Root: filepath.Join(t.TempDir(), "isolated", "123e4567-e89b-12d3-a456-426614174000")}
+	state := monitorTestState().WithAppProcess(4242, []string{"/usr/bin/curl"})
+	if err := store.Save(context.Background(), state); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := waitForIsolatedAppExit(context.Background(), store, time.Millisecond, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AppPID != 4242 || got.Reason != "app process exited" {
+		t.Fatalf("monitor state = %#v", got)
+	}
+}
+
+func TestWaitForIsolatedAppExitHonorsTimeout(t *testing.T) {
+	restore := stubMonitorPIDExists(func(int) bool { return true })
+	defer restore()
+	store := truntime.Store{Root: filepath.Join(t.TempDir(), "isolated", "123e4567-e89b-12d3-a456-426614174000")}
+	state := monitorTestState().WithAppProcess(4242, []string{"/usr/bin/curl"})
+	if err := store.Save(context.Background(), state); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := waitForIsolatedAppExit(context.Background(), store, time.Millisecond, time.Millisecond)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline exceeded, got state=%#v err=%v", got, err)
+	}
+	if got.AppPID != 4242 {
+		t.Fatalf("monitor state = %#v", got)
+	}
+}
+
 func TestIsolatedRecoveryTargets(t *testing.T) {
 	sessions := []status.IsolatedSessionSnapshot{
 		{SessionID: "dirty", Snapshot: status.Snapshot{State: status.StateDirty}},
@@ -1112,6 +1178,28 @@ func stubCurrentEUID(value int) func() {
 	currentEUID = func() int { return value }
 	return func() {
 		currentEUID = previous
+	}
+}
+
+func stubMonitorPIDExists(fn func(int) bool) func() {
+	previous := monitorPIDExists
+	monitorPIDExists = fn
+	return func() {
+		monitorPIDExists = previous
+	}
+}
+
+func monitorTestState() truntime.State {
+	return truntime.State{
+		Version:            truntime.StateVersion,
+		Mode:               planner.IsolatedAppTunnelKind,
+		ProfileFingerprint: "test-fingerprint",
+		WireGuardInterface: "brbwg123e4567",
+		SessionID:          "123e4567-e89b-12d3-a456-426614174000",
+		AppID:              "223e4567-e89b-12d3-a456-426614174000",
+		Namespace:          "brb-123e4567",
+		HostVeth:           "brbh123e4567",
+		NamespaceVeth:      "brbn123e4567",
 	}
 }
 

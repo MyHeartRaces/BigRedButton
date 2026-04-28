@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	stdruntime "runtime"
 	"strconv"
 	"strings"
@@ -124,9 +123,5 @@ func appendProcessProblem(missing []string, label string, process *truntime.Proc
 }
 
 func linuxPIDExists(pid int) bool {
-	if pid < 1 {
-		return false
-	}
-	_, err := os.Stat(filepath.Join("/proc", strconv.Itoa(pid)))
-	return err == nil || !os.IsNotExist(err)
+	return supervisor.PIDExists(pid)
 }

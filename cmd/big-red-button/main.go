@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -35,6 +36,7 @@ var currentEUID = os.Geteuid
 var lookupIPAddr = net.DefaultResolver.LookupIPAddr
 var executableLookPath = exec.LookPath
 var preflightCommandRunner platformlinux.CommandRunner = platformlinux.ExecRunner{}
+var monitorPIDExists = supervisor.PIDExists
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -85,6 +87,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return linuxConnect(args[1:], stdout, stderr)
 	case "linux-isolated-app":
 		return linuxIsolatedApp(args[1:], stdout, stderr)
+	case "linux-monitor-isolated-app":
+		return linuxMonitorIsolatedApp(args[1:], stdout, stderr)
 	case "linux-stop-isolated-app":
 		return linuxStopIsolatedApp(args[1:], stdout, stderr)
 	case "linux-cleanup-isolated-app":
@@ -958,12 +962,13 @@ func linuxIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	jsonOutput := fs.Bool("json", false, "print JSON output")
 	confirmed := fs.Bool("yes", false, "confirm this command may change Linux namespace, process and firewall state")
+	cleanupOnExit := fs.Bool("cleanup-on-exit", true, "start a background monitor that cleans up this isolated session when the app exits")
 	options := isolatedAppFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() < 2 {
-		fmt.Fprintln(stderr, "usage: big-red-button linux-isolated-app -yes [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-isolated-app -yes [-json] [-cleanup-on-exit=false] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 		return 2
 	}
 	if !*confirmed {
@@ -1007,6 +1012,15 @@ func linuxIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
 		Result:     result,
 		Operations: executor.Operations(),
 	}
+	if result.State == engine.StateConnected && *cleanupOnExit {
+		monitorPID, err := startLinuxIsolatedMonitor(plan.SessionID, plan.RuntimeRoot)
+		if err != nil {
+			output.MonitorError = err.Error()
+		} else {
+			output.MonitorStarted = true
+			output.MonitorPID = monitorPID
+		}
+	}
 	if *jsonOutput {
 		writeJSON(stdout, output)
 	} else {
@@ -1014,6 +1028,85 @@ func linuxIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
 		printLinuxIsolated(output, stdout)
 	}
 	if result.State != engine.StateConnected {
+		return 1
+	}
+	if *cleanupOnExit && output.MonitorError != "" {
+		return 1
+	}
+	return 0
+}
+
+func linuxMonitorIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-monitor-isolated-app", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	confirmed := fs.Bool("yes", false, "confirm this command may wait for and clean up Linux isolated session state")
+	options := isolatedStopFlags(fs)
+	pollInterval := fs.Duration("poll-interval", 2*time.Second, "process polling interval")
+	waitTimeout := fs.Duration("wait-timeout", 0, "maximum wait before aborting; 0 waits indefinitely")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "usage: big-red-button linux-monitor-isolated-app -yes [-json] -session-id uuid [-runtime-root path] [-poll-interval duration] [-wait-timeout duration]")
+		return 2
+	}
+	if !*confirmed {
+		fmt.Fprintln(stderr, "linux-monitor-isolated-app requires -yes because it may remove launcher-owned Linux namespace/firewall/runtime state")
+		return 2
+	}
+	if currentGOOS != "linux" {
+		fmt.Fprintf(stderr, "linux-monitor-isolated-app can only run on Linux; current OS is %s\n", currentGOOS)
+		return 1
+	}
+	if *pollInterval <= 0 {
+		fmt.Fprintln(stderr, "poll interval must be positive")
+		return 2
+	}
+
+	runtimeRoot := strings.TrimSpace(*options.runtimeRoot)
+	if runtimeRoot == "" {
+		runtimeRoot = planner.DefaultRuntimeRoot
+	}
+	sessionID := strings.TrimSpace(*options.sessionID)
+	if sessionID == "" {
+		fmt.Fprintln(stderr, "session ID is required")
+		return 2
+	}
+	store := truntime.Store{Root: filepath.Join(runtimeRoot, planner.DefaultIsolatedRuntimeSubdir, sessionID)}
+	waitStarted := time.Now()
+	monitor, err := waitForIsolatedAppExit(context.Background(), store, *pollInterval, *waitTimeout)
+	if err != nil {
+		fmt.Fprintf(stderr, "monitor isolated app: %v\n", err)
+		return 1
+	}
+	monitor.WaitDuration = time.Since(waitStarted).Round(time.Millisecond).String()
+	output := linuxIsolatedMonitorOutput{
+		SessionID:   sessionID,
+		RuntimeRoot: runtimeRoot,
+		Monitor:     monitor,
+	}
+
+	plan, err := planner.IsolatedAppStop(planner.IsolatedAppStopOptions{
+		SessionID:   sessionID,
+		RuntimeRoot: runtimeRoot,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "build isolated monitor cleanup plan: %v\n", err)
+		return 1
+	}
+	cleanup, err := runLinuxIsolatedPlan(plan)
+	if err != nil {
+		fmt.Fprintf(stderr, "run isolated monitor cleanup: %v\n", err)
+		return 1
+	}
+	output.Cleanup = &cleanup
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printLinuxIsolatedMonitor(output, stdout)
+	}
+	if cleanup.Result.State != engine.StateIdle {
 		return 1
 	}
 	return 0
@@ -1369,9 +1462,25 @@ type linuxLifecycleOutput struct {
 }
 
 type linuxIsolatedOutput struct {
-	Plan       planner.Plan              `json:"plan"`
-	Result     engine.Result             `json:"result"`
-	Operations []platformlinux.Operation `json:"operations,omitempty"`
+	Plan           planner.Plan              `json:"plan"`
+	Result         engine.Result             `json:"result"`
+	Operations     []platformlinux.Operation `json:"operations,omitempty"`
+	MonitorStarted bool                      `json:"monitor_started,omitempty"`
+	MonitorPID     int                       `json:"monitor_pid,omitempty"`
+	MonitorError   string                    `json:"monitor_error,omitempty"`
+}
+
+type linuxIsolatedMonitorState struct {
+	AppPID       int    `json:"app_pid,omitempty"`
+	Reason       string `json:"reason"`
+	WaitDuration string `json:"wait_duration,omitempty"`
+}
+
+type linuxIsolatedMonitorOutput struct {
+	SessionID   string                    `json:"session_id"`
+	RuntimeRoot string                    `json:"runtime_root"`
+	Monitor     linuxIsolatedMonitorState `json:"monitor"`
+	Cleanup     *linuxIsolatedOutput      `json:"cleanup,omitempty"`
 }
 
 type linuxIsolatedRecoveryOutput struct {
@@ -1809,7 +1918,28 @@ func printLinuxIsolated(output linuxIsolatedOutput, stdout io.Writer) {
 	if output.Result.RollbackError != "" {
 		fmt.Fprintf(stdout, "rollback error: %s\n", output.Result.RollbackError)
 	}
+	if output.MonitorStarted {
+		fmt.Fprintf(stdout, "monitor pid: %d\n", output.MonitorPID)
+	}
+	if output.MonitorError != "" {
+		fmt.Fprintf(stdout, "monitor error: %s\n", output.MonitorError)
+	}
 	printLinuxOperations(stdout, "isolated operations", output.Operations)
+}
+
+func printLinuxIsolatedMonitor(output linuxIsolatedMonitorOutput, stdout io.Writer) {
+	fmt.Fprintf(stdout, "isolated monitor session: %s\n", output.SessionID)
+	fmt.Fprintf(stdout, "isolated monitor root: %s\n", output.RuntimeRoot)
+	if output.Monitor.AppPID > 0 {
+		fmt.Fprintf(stdout, "app pid: %d\n", output.Monitor.AppPID)
+	}
+	fmt.Fprintf(stdout, "monitor reason: %s\n", output.Monitor.Reason)
+	if output.Monitor.WaitDuration != "" {
+		fmt.Fprintf(stdout, "wait duration: %s\n", output.Monitor.WaitDuration)
+	}
+	if output.Cleanup != nil {
+		printLinuxIsolated(*output.Cleanup, stdout)
+	}
 }
 
 func printLinuxIsolatedRecovery(output linuxIsolatedRecoveryOutput, stdout io.Writer) {
@@ -2130,6 +2260,69 @@ func isolatedRecoveryTargets(sessions []status.IsolatedSessionSnapshot, includeA
 	return targets, skipped
 }
 
+func startLinuxIsolatedMonitor(sessionID string, runtimeRoot string) (int, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return 0, fmt.Errorf("resolve current executable: %w", err)
+	}
+	args := []string{"linux-monitor-isolated-app", "-yes", "-session-id", sessionID}
+	if strings.TrimSpace(runtimeRoot) != "" {
+		args = append(args, "-runtime-root", runtimeRoot)
+	}
+	cmd := exec.Command(executable, args...)
+	if err := cmd.Start(); err != nil {
+		return 0, fmt.Errorf("start isolated monitor: %w", err)
+	}
+	return cmd.Process.Pid, nil
+}
+
+func waitForIsolatedAppExit(ctx context.Context, store truntime.Store, pollInterval time.Duration, waitTimeout time.Duration) (linuxIsolatedMonitorState, error) {
+	if pollInterval <= 0 {
+		return linuxIsolatedMonitorState{}, fmt.Errorf("poll interval must be positive")
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if waitTimeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, waitTimeout)
+		defer cancel()
+	}
+	for {
+		state, err := store.Load(ctx)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return linuxIsolatedMonitorState{Reason: "runtime state missing"}, nil
+			}
+			return linuxIsolatedMonitorState{}, err
+		}
+		if state.Mode != planner.IsolatedAppTunnelKind {
+			return linuxIsolatedMonitorState{}, fmt.Errorf("runtime state is not an isolated app tunnel session")
+		}
+		if state.AppProcess == nil {
+			return linuxIsolatedMonitorState{Reason: "app process missing from runtime state"}, nil
+		}
+		if !monitorPIDExists(state.AppProcess.PID) {
+			return linuxIsolatedMonitorState{
+				AppPID: state.AppProcess.PID,
+				Reason: "app process exited",
+			}, nil
+		}
+		if err := sleepContext(ctx, pollInterval); err != nil {
+			return linuxIsolatedMonitorState{AppPID: state.AppProcess.PID}, err
+		}
+	}
+}
+
+func sleepContext(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 func runLinuxIsolatedPlan(plan planner.Plan) (linuxIsolatedOutput, error) {
 	executor, err := platformlinux.NewIsolatedExecutor(platformlinux.IsolatedExecutorOptions{
 		Plan:        plan,
@@ -2208,7 +2401,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  linux-dry-run-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")
-	fmt.Fprintln(w, "  linux-isolated-app -yes [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+	fmt.Fprintln(w, "  linux-isolated-app -yes [-json] [-cleanup-on-exit=false] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+	fmt.Fprintln(w, "  linux-monitor-isolated-app -yes [-json] -session-id uuid [-runtime-root path] [-poll-interval duration] [-wait-timeout duration]")
 	fmt.Fprintln(w, "  linux-stop-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-cleanup-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-recover-isolated-sessions -yes [-json] [-all] [-runtime-root path]")

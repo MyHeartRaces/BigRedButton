@@ -33,6 +33,7 @@ Implemented:
 - composite Linux lifecycle executor with rollback tests
 - guarded Linux connect/disconnect CLI commands
 - Linux isolated app tunnel planner, dry-run, guarded apply, stop and cleanup
+- Linux isolated app exit monitor that cleans up session state after app exit
 - desktop GUI launcher with system and Linux isolated app controls
 - Arch Linux application launcher package
 - macOS `.pkg` installer with an app bundle
@@ -41,7 +42,7 @@ Implemented:
 Not implemented yet:
 
 - privileged daemon / IPC boundary
-- automatic isolated session crash recovery
+- unattended startup recovery when both the app and monitor are already gone
 - Windows, macOS, or mobile ports
 
 ## Requirements
@@ -289,6 +290,11 @@ sudo big-red-button linux-isolated-app \
 
 The start commands generate a session UUID when `-session-id` is omitted and
 print it in the plan/output. Use that UUID for stop, cleanup and status.
+`linux-isolated-app` starts a background cleanup monitor by default. The monitor
+waits for the selected app process to exit and then runs the normal isolated
+stop lifecycle to remove launcher-owned namespace, DNS, firewall and runtime
+state. Pass `-cleanup-on-exit=false` only when you intentionally want manual
+cleanup.
 
 Preflight:
 
@@ -322,6 +328,15 @@ best-effort cleanup command for the same session UUID:
 
 ```bash
 sudo big-red-button linux-cleanup-isolated-app \
+  -yes \
+  -session-id 123e4567-e89b-12d3-a456-426614174000
+```
+
+The monitor command is normally started automatically, but it can be run
+explicitly for a known active session:
+
+```bash
+sudo big-red-button linux-monitor-isolated-app \
   -yes \
   -session-id 123e4567-e89b-12d3-a456-426614174000
 ```
