@@ -58,9 +58,9 @@ Runtime on Linux:
 - `wstunnel` in `PATH`, or pass `-wstunnel-binary /path/to/wstunnel`
 - root privileges or equivalent capabilities for real connect/disconnect
 
-On Arch Linux, `iproute2` and `wireguard-tools` are official packages. The
-`wstunnel` helper may need to be installed separately if it is not available in
-your configured repositories.
+On Arch Linux, `iproute2`, `systemd` and `wireguard-tools` are official
+packages. The `wstunnel` helper may need to be installed separately if it is not
+available in your configured repositories.
 
 ## Build
 
