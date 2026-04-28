@@ -152,6 +152,51 @@ func TestIsolatedExecutorRunsSessionAndStop(t *testing.T) {
 	}
 }
 
+func TestIsolatedExecutorStopIsIdleWhenStateMissing(t *testing.T) {
+	runtimeRoot := t.TempDir()
+	sessionID := "123e4567-e89b-12d3-a456-426614174000"
+	plan, err := planner.IsolatedAppStop(planner.IsolatedAppStopOptions{
+		SessionID:   sessionID,
+		RuntimeRoot: runtimeRoot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &recordingRunner{}
+	stopper := &lifecycleStopper{}
+	executor, err := NewIsolatedExecutor(IsolatedExecutorOptions{
+		Plan:           plan,
+		Runner:         runner,
+		ProcessStopper: stopper,
+		RuntimeRoot:    runtimeRoot,
+		LookPath:       foundLookPath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := engine.New(executor).Run(context.Background(), plan)
+	if result.State != engine.StateIdle {
+		t.Fatalf("stop state = %s error = %s", result.State, result.Error)
+	}
+	if len(runner.argv) != 0 {
+		t.Fatalf("expected no Linux mutations, got %#v", runner.argv)
+	}
+	if len(stopper.stopped) != 0 {
+		t.Fatalf("expected no stopped processes, got %#v", stopper.stopped)
+	}
+	operations := operationStrings(executor.Operations())
+	for _, want := range []string{
+		"no runtime state at " + filepath.Join(runtimeRoot, planner.DefaultIsolatedRuntimeSubdir, sessionID, "state.json"),
+		"skip stop-isolated-app: no runtime state",
+		"skip clear-isolated-runtime-state: no runtime state",
+	} {
+		if !strings.Contains(operations, want) {
+			t.Fatalf("missing operation %q in:\n%s", want, operations)
+		}
+	}
+}
+
 func TestIsolatedExecutorFailsBeforeMutationWhenPrerequisiteMissing(t *testing.T) {
 	runtimeRoot := t.TempDir()
 	sessionID := "123e4567-e89b-12d3-a456-426614174000"

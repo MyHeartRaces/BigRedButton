@@ -610,6 +610,35 @@ func TestLinuxIsolatedAppRequiresConfirmation(t *testing.T) {
 	}
 }
 
+func TestLinuxStopIsolatedAppMissingStateIsIdle(t *testing.T) {
+	defer forceGOOS("linux")()
+	var stdout, stderr bytes.Buffer
+	runtimeRoot := t.TempDir()
+
+	code := run([]string{
+		"linux-stop-isolated-app",
+		"-yes",
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+		"-runtime-root", runtimeRoot,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"engine state: Idle",
+		"no runtime state at",
+		"skip stop-isolated-app: no runtime state",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "engine error:") {
+		t.Fatalf("expected no engine error, got: %s", out)
+	}
+}
+
 func TestLinuxStopIsolatedAppRequiresConfirmation(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 

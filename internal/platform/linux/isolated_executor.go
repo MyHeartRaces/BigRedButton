@@ -2,6 +2,7 @@ package linux
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -20,19 +21,20 @@ import (
 const DefaultNetNSConfigRoot = "/etc/netns"
 
 type IsolatedExecutor struct {
-	plan               planner.Plan
-	profile            profile.Config
-	runner             CommandRunner
-	processRunner      supervisor.ProcessRunner
-	stopper            supervisor.ProcessStopper
-	store              truntime.Store
-	sessionRuntimeRoot string
-	netNSConfigRoot    string
-	lookPath           func(string) (string, error)
-	runtimeState       truntime.State
-	wstunnelProcess    supervisor.Process
-	appProcess         supervisor.Process
-	operations         []Operation
+	plan                planner.Plan
+	profile             profile.Config
+	runner              CommandRunner
+	processRunner       supervisor.ProcessRunner
+	stopper             supervisor.ProcessStopper
+	store               truntime.Store
+	sessionRuntimeRoot  string
+	netNSConfigRoot     string
+	lookPath            func(string) (string, error)
+	runtimeState        truntime.State
+	runtimeStateMissing bool
+	wstunnelProcess     supervisor.Process
+	appProcess          supervisor.Process
+	operations          []Operation
 }
 
 type IsolatedExecutorOptions struct {
@@ -100,6 +102,10 @@ func NewIsolatedExecutor(options IsolatedExecutorOptions) (*IsolatedExecutor, er
 func (e *IsolatedExecutor) Apply(ctx context.Context, step planner.Step) error {
 	if e == nil {
 		return fmt.Errorf("linux isolated executor is nil")
+	}
+	if e.runtimeStateMissing && step.DependsOnRuntime {
+		e.recordRuntime(OperationApply, step.ID, "skip "+step.ID+": no runtime state")
+		return nil
 	}
 
 	switch step.ID {
@@ -457,9 +463,15 @@ func (e *IsolatedExecutor) storeRuntimeState(ctx context.Context, step planner.S
 func (e *IsolatedExecutor) readRuntimeState(ctx context.Context, step planner.Step) error {
 	state, err := e.store.Load(ctx)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			e.runtimeStateMissing = true
+			e.recordRuntime(OperationApply, step.ID, "no runtime state at "+e.storePath())
+			return nil
+		}
 		return err
 	}
 	e.runtimeState = state
+	e.runtimeStateMissing = false
 	e.recordRuntime(OperationApply, step.ID, "load "+e.storePath())
 	return nil
 }
