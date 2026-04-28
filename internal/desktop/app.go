@@ -530,7 +530,7 @@ func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := a.loadState()
-	response := a.runCLI(r.Context(), "isolated app recovery", []string{"linux-recover-isolated-sessions", "-yes"})
+	response := a.runCLI(r.Context(), "isolated app recovery", []string{"linux-recover-isolated-sessions", "-yes", "-startup"})
 	state.LastCommand = "isolated-recover"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output

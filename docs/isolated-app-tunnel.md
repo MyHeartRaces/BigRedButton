@@ -238,6 +238,9 @@ The repository currently includes the first Linux implementation slice:
 - `linux-recover-isolated-sessions -yes` scans known isolated runtime sessions
   and runs best-effort cleanup for dirty sessions only. `-all` can be used for
   explicit recovery of every known session.
+- `linux-recover-isolated-sessions -yes -startup` is intended for launcher
+  startup recovery. It restarts a missing cleanup monitor when the isolated app
+  and WSTunnel are still healthy; otherwise it cleans stale dirty sessions.
 - `isolated-sessions` lists every runtime session directory under the isolated
   runtime root, including dirty entries whose `state.json` cannot be loaded,
   so the GUI and CLI can surface recovery targets after a crash.
@@ -248,6 +251,6 @@ The repository currently includes the first Linux implementation slice:
 
 This is still early helper-level functionality. The GUI can start, stop and
 best-effort clean up a Linux isolated session through the CLI, and normal app
-exit now triggers monitor-driven cleanup. Unattended startup recovery for
-sessions whose monitor is also gone, plus the final privileged daemon/IPC
-boundary, are not complete.
+exit now triggers monitor-driven cleanup. Startup recovery can restore missing
+monitors or clean stale sessions, but the final privileged daemon/IPC boundary
+is not complete.

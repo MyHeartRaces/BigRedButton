@@ -1038,6 +1038,31 @@ func TestLinuxRecoverIsolatedSessionsRequiresConfirmation(t *testing.T) {
 	}
 }
 
+func TestLinuxRecoverIsolatedSessionsStartupMode(t *testing.T) {
+	defer forceGOOS("linux")()
+	var stdout, stderr bytes.Buffer
+	runtimeRoot := t.TempDir()
+
+	code := run([]string{
+		"linux-recover-isolated-sessions",
+		"-yes",
+		"-startup",
+		"-runtime-root", runtimeRoot,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"mode: startup recovery",
+		"targets: []",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
 func TestLinuxMonitorIsolatedAppRequiresConfirmation(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
@@ -1142,6 +1167,54 @@ func TestIsolatedRecoveryTargets(t *testing.T) {
 	targets, skipped = isolatedRecoveryTargets(sessions, true)
 	if strings.Join(targets, ",") != "dirty,connected" || len(skipped) != 0 {
 		t.Fatalf("all targets=%#v skipped=%#v", targets, skipped)
+	}
+}
+
+func TestIsolatedStartupRecoveryTargets(t *testing.T) {
+	restore := stubMonitorPIDExists(func(pid int) bool { return pid != 999999999 && pid != 999999997 })
+	defer restore()
+	pid := os.Getpid()
+	healthy := func(sessionID string, monitor *truntime.ProcessState) status.IsolatedSessionSnapshot {
+		state := monitorTestState().
+			WithAppProcess(pid, nil).
+			WithWSTunnelProcess(pid, nil)
+		state.SessionID = sessionID
+		state.MonitorProcess = monitor
+		return status.IsolatedSessionSnapshot{
+			SessionID: sessionID,
+			Snapshot:  status.Snapshot{State: status.StateConnected, Active: &state},
+		}
+	}
+	deadApp := monitorTestState().
+		WithAppProcess(999999999, nil).
+		WithWSTunnelProcess(pid, nil).
+		WithMonitorProcess(999999998, nil)
+	deadApp.SessionID = "423e4567-e89b-12d3-a456-426614174000"
+
+	sessions := []status.IsolatedSessionSnapshot{
+		healthy("123e4567-e89b-12d3-a456-426614174000", nil),
+		healthy("223e4567-e89b-12d3-a456-426614174000", &truntime.ProcessState{PID: 999999997}),
+		{
+			SessionID: deadApp.SessionID,
+			Snapshot:  status.Snapshot{State: status.StateDirty, Active: &deadApp},
+		},
+		{SessionID: "523e4567-e89b-12d3-a456-426614174000", Snapshot: status.Snapshot{State: status.StateConnected}},
+	}
+
+	monitors, cleanup, skipped := isolatedStartupRecoveryTargets(sessions, false)
+	if strings.Join(monitors, ",") != "123e4567-e89b-12d3-a456-426614174000,223e4567-e89b-12d3-a456-426614174000" {
+		t.Fatalf("monitors=%#v cleanup=%#v skipped=%#v", monitors, cleanup, skipped)
+	}
+	if strings.Join(cleanup, ",") != deadApp.SessionID {
+		t.Fatalf("cleanup=%#v", cleanup)
+	}
+	if strings.Join(skipped, ",") != "523e4567-e89b-12d3-a456-426614174000" {
+		t.Fatalf("skipped=%#v", skipped)
+	}
+
+	_, cleanup, skipped = isolatedStartupRecoveryTargets(sessions, true)
+	if strings.Join(cleanup, ",") != deadApp.SessionID+",523e4567-e89b-12d3-a456-426614174000" || len(skipped) != 0 {
+		t.Fatalf("all cleanup=%#v skipped=%#v", cleanup, skipped)
 	}
 }
 

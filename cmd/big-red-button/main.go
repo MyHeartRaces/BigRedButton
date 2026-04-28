@@ -1225,12 +1225,13 @@ func linuxRecoverIsolatedSessions(args []string, stdout io.Writer, stderr io.Wri
 	jsonOutput := fs.Bool("json", false, "print JSON output")
 	confirmed := fs.Bool("yes", false, "confirm this command may remove launcher-owned Linux namespace/firewall/runtime state")
 	includeAll := fs.Bool("all", false, "recover all known isolated sessions, including sessions that still look connected")
+	startupMode := fs.Bool("startup", false, "restart missing isolated cleanup monitors before cleaning stale sessions")
 	runtimeRoot := fs.String("runtime-root", planner.DefaultRuntimeRoot, "launcher runtime state root")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "usage: big-red-button linux-recover-isolated-sessions -yes [-json] [-all] [-runtime-root path]")
+		fmt.Fprintln(stderr, "usage: big-red-button linux-recover-isolated-sessions -yes [-json] [-all] [-startup] [-runtime-root path]")
 		return 2
 	}
 	if !*confirmed {
@@ -1248,13 +1249,28 @@ func linuxRecoverIsolatedSessions(args []string, stdout io.Writer, stderr io.Wri
 		return 1
 	}
 	targets, skipped := isolatedRecoveryTargets(sessions, *includeAll)
+	monitorTargets := []string(nil)
+	if *startupMode {
+		monitorTargets, targets, skipped = isolatedStartupRecoveryTargets(sessions, *includeAll)
+	}
 	output := linuxIsolatedRecoveryOutput{
 		RuntimeRoot: *runtimeRoot,
 		All:         *includeAll,
+		Startup:     *startupMode,
+		Monitors:    monitorTargets,
 		Targets:     targets,
 		Skipped:     skipped,
 	}
 	code := 0
+	for _, sessionID := range monitorTargets {
+		monitorPID, err := startLinuxIsolatedMonitor(sessionID, *runtimeRoot)
+		restart := linuxIsolatedMonitorRestart{SessionID: sessionID, MonitorPID: monitorPID}
+		if err != nil {
+			restart.Error = err.Error()
+			code = 1
+		}
+		output.MonitorRestarts = append(output.MonitorRestarts, restart)
+	}
 	for _, sessionID := range targets {
 		plan, err := planner.IsolatedAppCleanup(planner.IsolatedAppStopOptions{
 			SessionID:   sessionID,
@@ -1488,11 +1504,20 @@ type linuxIsolatedMonitorOutput struct {
 }
 
 type linuxIsolatedRecoveryOutput struct {
-	RuntimeRoot string                `json:"runtime_root"`
-	All         bool                  `json:"all"`
-	Targets     []string              `json:"targets"`
-	Sessions    []linuxIsolatedOutput `json:"sessions,omitempty"`
-	Skipped     []string              `json:"skipped,omitempty"`
+	RuntimeRoot     string                        `json:"runtime_root"`
+	All             bool                          `json:"all"`
+	Startup         bool                          `json:"startup,omitempty"`
+	Monitors        []string                      `json:"monitors,omitempty"`
+	MonitorRestarts []linuxIsolatedMonitorRestart `json:"monitor_restarts,omitempty"`
+	Targets         []string                      `json:"targets"`
+	Sessions        []linuxIsolatedOutput         `json:"sessions,omitempty"`
+	Skipped         []string                      `json:"skipped,omitempty"`
+}
+
+type linuxIsolatedMonitorRestart struct {
+	SessionID  string `json:"session_id"`
+	MonitorPID int    `json:"monitor_pid,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 type diagnosticsOutput struct {
@@ -1950,8 +1975,20 @@ func printLinuxIsolatedRecovery(output linuxIsolatedRecoveryOutput, stdout io.Wr
 	fmt.Fprintf(stdout, "isolated recovery root: %s\n", output.RuntimeRoot)
 	if output.All {
 		fmt.Fprintln(stdout, "mode: all known sessions")
+	} else if output.Startup {
+		fmt.Fprintln(stdout, "mode: startup recovery")
 	} else {
 		fmt.Fprintln(stdout, "mode: dirty sessions only")
+	}
+	if len(output.Monitors) > 0 {
+		fmt.Fprintf(stdout, "monitor targets: %v\n", output.Monitors)
+	}
+	for _, restart := range output.MonitorRestarts {
+		if restart.Error != "" {
+			fmt.Fprintf(stdout, "monitor restart failed: %s: %s\n", restart.SessionID, restart.Error)
+			continue
+		}
+		fmt.Fprintf(stdout, "monitor restarted: %s pid %d\n", restart.SessionID, restart.MonitorPID)
 	}
 	if len(output.Targets) == 0 {
 		fmt.Fprintln(stdout, "targets: []")
@@ -2264,6 +2301,42 @@ func isolatedRecoveryTargets(sessions []status.IsolatedSessionSnapshot, includeA
 	return targets, skipped
 }
 
+func isolatedStartupRecoveryTargets(sessions []status.IsolatedSessionSnapshot, includeAll bool) ([]string, []string, []string) {
+	var monitors []string
+	var cleanup []string
+	var skipped []string
+	for _, session := range sessions {
+		if isolatedSessionNeedsMonitor(session) {
+			monitors = append(monitors, session.SessionID)
+			continue
+		}
+		switch {
+		case includeAll:
+			cleanup = append(cleanup, session.SessionID)
+		case session.Snapshot.State == status.StateDirty:
+			cleanup = append(cleanup, session.SessionID)
+		default:
+			skipped = append(skipped, session.SessionID)
+		}
+	}
+	return monitors, cleanup, skipped
+}
+
+func isolatedSessionNeedsMonitor(session status.IsolatedSessionSnapshot) bool {
+	active := session.Snapshot.Active
+	if active == nil || active.Mode != planner.IsolatedAppTunnelKind {
+		return false
+	}
+	if !runtimeProcessHealthy(active.AppProcess) || !runtimeProcessHealthy(active.WSTunnelProcess) {
+		return false
+	}
+	return !runtimeProcessHealthy(active.MonitorProcess)
+}
+
+func runtimeProcessHealthy(process *truntime.ProcessState) bool {
+	return process != nil && monitorPIDExists(process.PID) && supervisor.PIDArgvMatches(process.PID, process.Argv)
+}
+
 func startLinuxIsolatedMonitor(sessionID string, runtimeRoot string) (int, error) {
 	executable, err := os.Executable()
 	if err != nil {
@@ -2421,6 +2494,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  linux-monitor-isolated-app -yes [-json] -session-id uuid [-runtime-root path] [-poll-interval duration] [-wait-timeout duration]")
 	fmt.Fprintln(w, "  linux-stop-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-cleanup-isolated-app -yes [-json] -session-id uuid [-runtime-root path]")
-	fmt.Fprintln(w, "  linux-recover-isolated-sessions -yes [-json] [-all] [-runtime-root path]")
+	fmt.Fprintln(w, "  linux-recover-isolated-sessions -yes [-json] [-all] [-startup] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-disconnect -yes [-json] [-runtime-root path] [profile.json]")
 }

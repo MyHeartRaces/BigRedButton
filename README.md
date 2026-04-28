@@ -34,6 +34,7 @@ Implemented:
 - guarded Linux connect/disconnect CLI commands
 - Linux isolated app tunnel planner, dry-run, guarded apply, stop and cleanup
 - Linux isolated app exit monitor that cleans up session state after app exit
+- Linux startup recovery mode for stale isolated sessions and missing monitors
 - desktop GUI launcher with system and Linux isolated app controls
 - Arch Linux application launcher package
 - macOS `.pkg` installer with an app bundle
@@ -42,7 +43,6 @@ Implemented:
 Not implemented yet:
 
 - privileged daemon / IPC boundary
-- unattended startup recovery when both the app and monitor are already gone
 - Windows, macOS, or mobile ports
 
 ## Requirements
@@ -346,6 +346,14 @@ To recover all dirty isolated sessions discovered under the runtime root:
 
 ```bash
 sudo big-red-button linux-recover-isolated-sessions -yes
+```
+
+Startup recovery mode is safer after relaunching the GUI or CLI. It restarts a
+missing cleanup monitor when the isolated app and WSTunnel are still healthy;
+otherwise it cleans stale dirty sessions:
+
+```bash
+sudo big-red-button linux-recover-isolated-sessions -yes -startup
 ```
 
 Status:
