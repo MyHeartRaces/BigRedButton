@@ -26,6 +26,7 @@ Implemented:
 - Linux route exclusions for the tunnel gateway
 - Linux system tunnel prerequisite checks before network mutation
 - Linux preflight command for endpoint, binary and route discovery checks
+- Linux isolated app preflight checks for app command, binaries and runtime state
 - tunnel helper command builder and process executor
 - WireGuard `wg setconf` renderer and Linux executor
 - Linux system DNS adapter through `systemd-resolved` / `resolvectl`
@@ -248,6 +249,13 @@ sudo big-red-button linux-isolated-app \
 
 The start commands generate a session UUID when `-session-id` is omitted and
 print it in the plan/output. Use that UUID for stop, cleanup and status.
+
+Preflight:
+
+```bash
+big-red-button linux-preflight-isolated-app \
+  /path/to/profile.json -- /usr/bin/curl https://example.com
+```
 
 When launched through `sudo` or `pkexec`, the CLI tries to infer the desktop
 user from `SUDO_UID`/`SUDO_GID` or `PKEXEC_UID` and launches the selected app

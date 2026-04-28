@@ -67,6 +67,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return linuxDryRunConnect(args[1:], stdout, stderr)
 	case "linux-preflight":
 		return linuxPreflight(args[1:], stdout, stderr)
+	case "linux-preflight-isolated-app":
+		return linuxPreflightIsolatedApp(args[1:], stdout, stderr)
 	case "linux-dry-run-isolated-app":
 		return linuxDryRunIsolatedApp(args[1:], stdout, stderr)
 	case "linux-dry-run-disconnect":
@@ -521,6 +523,77 @@ func linuxPreflight(args []string, stdout io.Writer, stderr io.Writer) int {
 	if *discoverRoutes {
 		output.Checks = append(output.Checks, linuxRouteDiscoveryChecks(context.Background(), endpointIPs)...)
 	}
+
+	if *jsonOutput {
+		writeJSON(stdout, output)
+	} else {
+		printLinuxPreflight(output, stdout)
+	}
+	if linuxPreflightOK(output) {
+		return 0
+	}
+	return 1
+}
+
+func linuxPreflightIsolatedApp(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("linux-preflight-isolated-app", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	jsonOutput := fs.Bool("json", false, "print JSON output")
+	options := isolatedAppFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() < 2 {
+		fmt.Fprintln(stderr, "usage: big-red-button linux-preflight-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
+		return 2
+	}
+	if currentGOOS != "linux" {
+		fmt.Fprintf(stderr, "linux-preflight-isolated-app can only run on Linux; current OS is %s\n", currentGOOS)
+		return 1
+	}
+
+	output := linuxPreflightOutput{}
+	config, err := profile.LoadFile(fs.Arg(0))
+	if err != nil {
+		output.Checks = append(output.Checks, preflightCheck{Name: "profile", Status: "failed", Detail: err.Error()})
+		if *jsonOutput {
+			writeJSON(stdout, output)
+		} else {
+			printLinuxPreflight(output, stdout)
+		}
+		return 1
+	}
+	summary := config.Summary()
+	output.Profile = &summary
+	output.Checks = append(output.Checks, preflightCheck{Name: "profile", Status: "ok", Detail: "profile is valid"})
+
+	isolatedOptions, err := withDefaultSessionID(isolatedAppOptionsFromFlags(options, isolatedAppCommandArgs(fs.Args())))
+	if err != nil {
+		output.Checks = append(output.Checks, preflightCheck{Name: "session", Status: "failed", Detail: err.Error()})
+		if *jsonOutput {
+			writeJSON(stdout, output)
+		} else {
+			printLinuxPreflight(output, stdout)
+		}
+		return 1
+	}
+	isolatedOptions = withDefaultLaunchIdentity(isolatedOptions)
+	isolatedOptions = withDefaultDesktopEnv(isolatedOptions)
+	plan, err := planner.IsolatedAppTunnel(config, isolatedOptions)
+	if err != nil {
+		output.Checks = append(output.Checks, preflightCheck{Name: "plan", Status: "failed", Detail: err.Error()})
+		if *jsonOutput {
+			writeJSON(stdout, output)
+		} else {
+			printLinuxPreflight(output, stdout)
+		}
+		return 1
+	}
+	output.Plan = &plan
+	output.Checks = append(output.Checks, preflightCheck{Name: "plan", Status: "ok", Detail: "isolated app plan is buildable"})
+	output.Checks = append(output.Checks, linuxPrerequisiteChecks(plan)...)
+	output.Checks = append(output.Checks, linuxIsolatedAppExecutableCheck(plan))
+	output.Checks = append(output.Checks, linuxIsolatedRuntimeCheck(plan))
 
 	if *jsonOutput {
 		writeJSON(stdout, output)
@@ -1468,7 +1541,11 @@ func printLinuxDryRun(output linuxDryRunOutput, stdout io.Writer) {
 }
 
 func printLinuxPreflight(output linuxPreflightOutput, stdout io.Writer) {
-	fmt.Fprintln(stdout, "linux preflight")
+	if output.Plan != nil && output.Plan.Kind == planner.IsolatedAppTunnelKind {
+		fmt.Fprintln(stdout, "linux isolated app preflight")
+	} else {
+		fmt.Fprintln(stdout, "linux preflight")
+	}
 	if output.Profile != nil {
 		fmt.Fprintf(stdout, "profile fingerprint: %s\n", output.Profile.Fingerprint)
 		fmt.Fprintf(stdout, "profile gateway: %s\n", output.Profile.WSTunnelURL)
@@ -1524,6 +1601,45 @@ func linuxPrerequisiteChecks(plan planner.Plan) []preflightCheck {
 		}
 	}
 	return checks
+}
+
+func linuxIsolatedAppExecutableCheck(plan planner.Plan) preflightCheck {
+	executable := ""
+	for _, step := range plan.Steps {
+		if step.ID == "validate-app-command" {
+			values := stepDetailValues(step, "executable")
+			if len(values) > 0 {
+				executable = values[0]
+			}
+			break
+		}
+	}
+	if executable == "" {
+		return preflightCheck{Name: "app executable", Status: "failed", Detail: "app executable is missing from plan"}
+	}
+	check := preflightCheck{Name: "app " + executable, Status: "ok", Detail: "found"}
+	if err := platformlinux.ValidateExecutable(executableLookPath, executable); err != nil {
+		check.Status = "failed"
+		check.Detail = err.Error()
+	}
+	return check
+}
+
+func linuxIsolatedRuntimeCheck(plan planner.Plan) preflightCheck {
+	if strings.TrimSpace(plan.RuntimeRoot) == "" || strings.TrimSpace(plan.SessionID) == "" {
+		return preflightCheck{Name: "isolated runtime", Status: "failed", Detail: "runtime root or session ID is missing from plan"}
+	}
+	snapshot := status.FromStore(context.Background(), truntime.Store{
+		Root: filepath.Join(plan.RuntimeRoot, planner.DefaultIsolatedRuntimeSubdir, plan.SessionID),
+	})
+	if snapshot.State == status.StateIdle {
+		return preflightCheck{Name: "isolated runtime", Status: "ok", Detail: "no active session"}
+	}
+	detail := string(snapshot.State)
+	if snapshot.Error != "" {
+		detail += ": " + snapshot.Error
+	}
+	return preflightCheck{Name: "isolated runtime", Status: "failed", Detail: detail}
 }
 
 func linuxRouteDiscoveryChecks(ctx context.Context, endpointIPs []string) []preflightCheck {
@@ -1837,6 +1953,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  diagnostics [-json] [-runtime-root path] [-profile profile.json]")
 	fmt.Fprintln(w, "  linux-dry-run-connect [-json] [-discover-routes] [-persist-runtime-state] [-endpoint-ip ip[,ip]] <profile.json>")
 	fmt.Fprintln(w, "  linux-preflight [-json] [-discover-routes] [-endpoint-ip ip[,ip]] <profile.json>")
+	fmt.Fprintln(w, "  linux-preflight-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-dry-run-isolated-app [-json] [-session-id uuid] [-app-id uuid] [-dns ip[,ip]] [-app-uid uid -app-gid gid] [-app-env KEY=value] <profile.json> -- <command> [args...]")
 	fmt.Fprintln(w, "  linux-dry-run-disconnect [-json] [-persist-runtime-state] [-wireguard-interface name] [-runtime-root path]")
 	fmt.Fprintln(w, "  linux-connect -yes [-json] [-endpoint-ip ip[,ip]] <profile.json>")

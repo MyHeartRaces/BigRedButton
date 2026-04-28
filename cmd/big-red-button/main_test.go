@@ -531,6 +531,72 @@ func TestLinuxPreflightCommandFailsMissingBinary(t *testing.T) {
 	}
 }
 
+func TestLinuxPreflightIsolatedAppCommand(t *testing.T) {
+	defer forceGOOS("linux")()
+	restoreLookPath := stubExecutableLookPath(func(binary string) (string, error) {
+		return "/usr/bin/" + binary, nil
+	})
+	defer restoreLookPath()
+	runtimeRoot := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"linux-preflight-isolated-app",
+		"-runtime-root", runtimeRoot,
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+		"-app-uid", "1000",
+		"-app-gid", "1000",
+		"-app-env", "DISPLAY=:1",
+		"../../testdata/profiles/valid-wgws.json",
+		"--",
+		"curl", "https://example.com",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"linux isolated app preflight",
+		"ok profile: profile is valid",
+		"ok binary nft: found",
+		"ok binary setpriv: found",
+		"ok binary env: found",
+		"ok app curl: found",
+		"ok isolated runtime: no active session",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
+func TestLinuxPreflightIsolatedAppCommandFailsMissingApp(t *testing.T) {
+	defer forceGOOS("linux")()
+	restoreLookPath := stubExecutableLookPath(func(binary string) (string, error) {
+		if binary == "curl" {
+			return "", fmt.Errorf("not found")
+		}
+		return "/usr/bin/" + binary, nil
+	})
+	defer restoreLookPath()
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"linux-preflight-isolated-app",
+		"-runtime-root", t.TempDir(),
+		"-session-id", "123e4567-e89b-12d3-a456-426614174000",
+		"../../testdata/profiles/valid-wgws.json",
+		"--",
+		"curl", "https://example.com",
+	}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("run() code = %d stdout = %s stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "failed app curl") {
+		t.Fatalf("expected missing app failure, got: %s", stdout.String())
+	}
+}
+
 func TestLinuxDryRunConnectAndDisconnectRuntimeState(t *testing.T) {
 	runtimeRoot := t.TempDir()
 	var connectStdout, connectStderr bytes.Buffer

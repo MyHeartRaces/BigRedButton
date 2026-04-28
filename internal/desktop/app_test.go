@@ -107,6 +107,43 @@ func TestBuildLinuxPreflightArgs(t *testing.T) {
 	}
 }
 
+func TestBuildLinuxIsolatedPreflightArgs(t *testing.T) {
+	t.Setenv("DISPLAY", ":1")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("XAUTHORITY", "")
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "")
+	t.Setenv("PULSE_SERVER", "")
+	t.Setenv("PIPEWIRE_RUNTIME_DIR", "")
+
+	args, err := buildLinuxIsolatedPreflightArgs(guiState{
+		ProfilePath:     " /tmp/profile.json ",
+		WSTunnelBinary:  " /usr/bin/wstunnel ",
+		IsolatedSession: "123e4567-e89b-12d3-a456-426614174000",
+		IsolatedCommand: `/usr/bin/env "A=B C" /usr/bin/curl https://example.com`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(args, "\n")
+	for _, want := range []string{
+		"linux-preflight-isolated-app",
+		"-session-id\n123e4567-e89b-12d3-a456-426614174000",
+		"-wstunnel-binary\n/usr/bin/wstunnel",
+		"-app-env\nDISPLAY=:1",
+		"/tmp/profile.json\n--\n/usr/bin/env\nA=B C\n/usr/bin/curl\nhttps://example.com",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in args: %#v", want, args)
+		}
+	}
+
+	_, err = buildLinuxIsolatedPreflightArgs(guiState{ProfilePath: "/tmp/profile.json"})
+	if err == nil {
+		t.Fatal("expected missing command error")
+	}
+}
+
 func TestClearIsolatedSessionOnSuccess(t *testing.T) {
 	state := guiState{IsolatedSession: "123e4567-e89b-12d3-a456-426614174000"}
 	cleared := clearIsolatedSessionOnSuccess(state, actionResponse{OK: true})

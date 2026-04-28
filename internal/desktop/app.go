@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	stdruntime "runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -104,6 +105,7 @@ func Run(ctx context.Context, options Options) error {
 	mux.HandleFunc("/api/disconnect", a.disconnect)
 	mux.HandleFunc("/api/diagnostics", a.diagnostics)
 	mux.HandleFunc("/api/preflight", a.preflight)
+	mux.HandleFunc("/api/isolated/preflight", a.isolatedPreflight)
 	mux.HandleFunc("/api/isolated/start", a.isolatedStart)
 	mux.HandleFunc("/api/isolated/stop", a.isolatedStop)
 	mux.HandleFunc("/api/isolated/cleanup", a.isolatedCleanup)
@@ -319,6 +321,43 @@ func (a *app) preflight(w http.ResponseWriter, r *http.Request) {
 	}
 	response := a.runCLIUnprivileged(r.Context(), "preflight", args)
 	state.LastCommand = "preflight"
+	state.LastCommandTime = time.Now().Format(time.RFC3339)
+	state.LastOutput = response.Output
+	_ = a.saveState(state)
+	writeJSON(w, response)
+}
+
+func (a *app) isolatedPreflight(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	request, err := decodeAction(r.Body)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
+		return
+	}
+	if stdruntime.GOOS != "linux" {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "isolated app preflight is implemented only on Linux"})
+		return
+	}
+	state := a.loadState()
+	if strings.TrimSpace(request.WSTunnelBinary) != "" {
+		state.WSTunnelBinary = strings.TrimSpace(request.WSTunnelBinary)
+	}
+	if strings.TrimSpace(request.SessionID) != "" {
+		state.IsolatedSession = strings.TrimSpace(request.SessionID)
+	}
+	if strings.TrimSpace(request.AppCommand) != "" {
+		state.IsolatedCommand = strings.TrimSpace(request.AppCommand)
+	}
+	args, err := buildLinuxIsolatedPreflightArgs(state)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: err.Error()})
+		return
+	}
+	response := a.runCLIUnprivileged(r.Context(), "isolated app preflight", args)
+	state.LastCommand = "isolated-preflight"
 	state.LastCommandTime = time.Now().Format(time.RFC3339)
 	state.LastOutput = response.Output
 	_ = a.saveState(state)
@@ -621,6 +660,36 @@ func buildLinuxPreflightArgs(state guiState) ([]string, error) {
 		args = append(args, "-wstunnel-binary", wstunnelBinary)
 	}
 	args = append(args, profilePath)
+	return args, nil
+}
+
+func buildLinuxIsolatedPreflightArgs(state guiState) ([]string, error) {
+	profilePath := strings.TrimSpace(state.ProfilePath)
+	if profilePath == "" {
+		return nil, errors.New("upload a profile first")
+	}
+	command, err := splitCommandLine(state.IsolatedCommand)
+	if err != nil {
+		return nil, err
+	}
+	if len(command) == 0 {
+		return nil, errors.New("app command is required")
+	}
+	args := []string{"linux-preflight-isolated-app"}
+	if sessionID := strings.TrimSpace(state.IsolatedSession); sessionID != "" {
+		args = append(args, "-session-id", sessionID)
+	}
+	if wstunnelBinary := strings.TrimSpace(state.WSTunnelBinary); wstunnelBinary != "" {
+		args = append(args, "-wstunnel-binary", wstunnelBinary)
+	}
+	if stdruntime.GOOS == "linux" {
+		args = append(args, "-app-uid", strconv.Itoa(os.Getuid()), "-app-gid", strconv.Itoa(os.Getgid()))
+	}
+	for _, env := range desktopLaunchEnv() {
+		args = append(args, "-app-env", env)
+	}
+	args = append(args, profilePath, "--")
+	args = append(args, command...)
 	return args, nil
 }
 

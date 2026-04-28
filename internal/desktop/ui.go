@@ -296,6 +296,7 @@ const indexHTML = `<!doctype html>
           <input id="isolated-command" autocomplete="off" placeholder="/usr/bin/curl https://example.com">
         </label>
         <div class="row">
+          <button id="isolated-preflight" type="button">Preflight</button>
           <button class="primary" id="isolated-start" type="button">Start App</button>
           <button id="isolated-stop" type="button">Stop App</button>
           <button class="danger" id="isolated-cleanup" type="button">Cleanup</button>
@@ -328,6 +329,7 @@ const indexHTML = `<!doctype html>
     const disconnectButton = document.getElementById('disconnect');
     const preflightButton = document.getElementById('preflight');
     const diagnosticsButton = document.getElementById('diagnostics');
+    const isolatedPreflightButton = document.getElementById('isolated-preflight');
     const isolatedStartButton = document.getElementById('isolated-start');
     const isolatedStopButton = document.getElementById('isolated-stop');
     const isolatedCleanupButton = document.getElementById('isolated-cleanup');
@@ -355,6 +357,7 @@ const indexHTML = `<!doctype html>
       disconnectButton.disabled = busy;
       preflightButton.disabled = busy;
       diagnosticsButton.disabled = busy;
+      isolatedPreflightButton.disabled = busy;
       isolatedStartButton.disabled = busy;
       isolatedStopButton.disabled = busy;
       isolatedCleanupButton.disabled = busy;
@@ -470,6 +473,7 @@ const indexHTML = `<!doctype html>
     disconnectButton.addEventListener('click', () => action('/api/disconnect'));
     preflightButton.addEventListener('click', () => action('/api/preflight'));
     diagnosticsButton.addEventListener('click', () => action('/api/diagnostics'));
+    isolatedPreflightButton.addEventListener('click', () => action('/api/isolated/preflight'));
     isolatedStartButton.addEventListener('click', () => action('/api/isolated/start'));
     isolatedStopButton.addEventListener('click', () => action('/api/isolated/stop'));
     isolatedCleanupButton.addEventListener('click', () => action('/api/isolated/cleanup'));
