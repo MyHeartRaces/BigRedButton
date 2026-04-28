@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/MyHeartRaces/BigRedButton/internal/status"
 )
 
 func TestDecodeActionTrimsValues(t *testing.T) {
@@ -171,6 +173,22 @@ func TestClearIsolatedSessionOnSuccess(t *testing.T) {
 	kept := clearIsolatedSessionOnSuccess(state, actionResponse{OK: false})
 	if kept.IsolatedSession != state.IsolatedSession {
 		t.Fatalf("expected failed lifecycle to keep session, got %#v", kept)
+	}
+}
+
+func TestIsolatedSessionsNeedStartupRecovery(t *testing.T) {
+	if isolatedSessionsNeedStartupRecovery(nil) {
+		t.Fatal("empty session list should not need recovery")
+	}
+	if isolatedSessionsNeedStartupRecovery([]status.IsolatedSessionSnapshot{
+		{SessionID: "connected", Snapshot: status.Snapshot{State: status.StateConnected}},
+	}) {
+		t.Fatal("connected session should not need recovery")
+	}
+	if !isolatedSessionsNeedStartupRecovery([]status.IsolatedSessionSnapshot{
+		{SessionID: "dirty", Snapshot: status.Snapshot{State: status.StateDirty}},
+	}) {
+		t.Fatal("dirty session should need recovery")
 	}
 }
 

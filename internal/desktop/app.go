@@ -154,6 +154,9 @@ func Run(ctx context.Context, options Options) error {
 		}
 	}
 	logger.Printf("serving %s", url)
+	if desktopGOOS == "linux" {
+		go a.recoverIsolatedOnStartup(ctx)
+	}
 
 	select {
 	case <-ctx.Done():
@@ -164,6 +167,26 @@ func Run(ctx context.Context, options Options) error {
 		return ctx.Err()
 	case err := <-serverErr:
 		return err
+	}
+}
+
+func (a *app) recoverIsolatedOnStartup(ctx context.Context) {
+	sessions, err := status.IsolatedSessions(ctx, planner.DefaultRuntimeRoot)
+	if err != nil {
+		a.logger.Printf("isolated startup recovery skipped: list sessions: %v", err)
+		return
+	}
+	if !isolatedSessionsNeedStartupRecovery(sessions) {
+		return
+	}
+	response := a.runCLI(ctx, "isolated startup recovery", []string{"linux-recover-isolated-sessions", "-yes", "-startup"})
+	state := a.loadState()
+	state.LastCommand = "isolated-startup-recover"
+	state.LastCommandTime = time.Now().Format(time.RFC3339)
+	state.LastOutput = response.Output
+	_ = a.saveState(state)
+	if response.Error != "" {
+		a.logger.Printf("isolated startup recovery failed: %s", response.Output)
 	}
 }
 
@@ -772,6 +795,15 @@ func clearIsolatedSessionOnSuccess(state guiState, response actionResponse) guiS
 		state.IsolatedSession = ""
 	}
 	return state
+}
+
+func isolatedSessionsNeedStartupRecovery(sessions []status.IsolatedSessionSnapshot) bool {
+	for _, session := range sessions {
+		if session.Snapshot.State == status.StateDirty {
+			return true
+		}
+	}
+	return false
 }
 
 func desktopLaunchEnv() []string {

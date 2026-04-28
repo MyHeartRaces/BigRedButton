@@ -241,6 +241,8 @@ The repository currently includes the first Linux implementation slice:
 - `linux-recover-isolated-sessions -yes -startup` is intended for launcher
   startup recovery. It restarts a missing cleanup monitor when the isolated app
   and WSTunnel are still healthy; otherwise it cleans stale dirty sessions.
+- The desktop GUI runs startup recovery in the background on Linux only when
+  existing isolated runtime sessions are already marked dirty.
 - `isolated-sessions` lists every runtime session directory under the isolated
   runtime root, including dirty entries whose `state.json` cannot be loaded,
   so the GUI and CLI can surface recovery targets after a crash.

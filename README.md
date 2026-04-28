@@ -35,6 +35,7 @@ Implemented:
 - Linux isolated app tunnel planner, dry-run, guarded apply, stop and cleanup
 - Linux isolated app exit monitor that cleans up session state after app exit
 - Linux startup recovery mode for stale isolated sessions and missing monitors
+- desktop GUI startup recovery for dirty Linux isolated sessions
 - desktop GUI launcher with system and Linux isolated app controls
 - Arch Linux application launcher package
 - macOS `.pkg` installer with an app bundle
