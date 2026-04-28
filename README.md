@@ -162,7 +162,8 @@ The PKGBUILD is in `packaging/arch/PKGBUILD`.
 ## Experimental Daemon IPC
 
 `big-red-buttond` is an early read-only local IPC daemon. It listens on a Unix
-domain socket and exposes JSON endpoints for health, status and diagnostics:
+domain socket and exposes JSON endpoints for health, profile validation,
+connect planning, status and diagnostics:
 
 ```bash
 sudo systemctl start big-red-buttond.service

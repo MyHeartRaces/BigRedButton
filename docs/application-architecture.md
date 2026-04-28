@@ -170,8 +170,8 @@ Linux MVP IPC:
 Current implementation slice:
 
 - `big-red-buttond` listens on the Unix socket.
-- `/v1/health`, `/v1/status` and `/v1/diagnostics` are read-only JSON
-  endpoints.
+- `/v1/health`, `/v1/profile/validate`, `/v1/plan/connect`, `/v1/status` and
+  `/v1/diagnostics` are read-only JSON endpoints.
 - The Arch Linux package installs `big-red-buttond.service` as the systemd
   entrypoint for this helper.
 - `big-red-button daemon-status` can query the daemon over the same socket for

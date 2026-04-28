@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/MyHeartRaces/BigRedButton/internal/planner"
 )
 
 type Client struct {
@@ -42,6 +45,29 @@ func (c *Client) Status(ctx context.Context) (StatusResponse, error) {
 	return response, nil
 }
 
+func (c *Client) ValidateProfile(ctx context.Context, payload []byte) (ValidateProfileResponse, error) {
+	var response ValidateProfileResponse
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/profile/validate", payload, &response); err != nil {
+		return ValidateProfileResponse{}, err
+	}
+	return response, nil
+}
+
+func (c *Client) PlanConnect(ctx context.Context, payload []byte, options planner.Options) (PlanConnectResponse, error) {
+	request, err := json.Marshal(PlanConnectRequest{
+		Profile: append([]byte(nil), payload...),
+		Options: options,
+	})
+	if err != nil {
+		return PlanConnectResponse{}, err
+	}
+	var response PlanConnectResponse
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/plan/connect", request, &response); err != nil {
+		return PlanConnectResponse{}, err
+	}
+	return response, nil
+}
+
 func (c *Client) Diagnostics(ctx context.Context) (DiagnosticsResponse, error) {
 	var response DiagnosticsResponse
 	if err := c.getJSON(ctx, "/v1/diagnostics", &response); err != nil {
@@ -51,6 +77,10 @@ func (c *Client) Diagnostics(ctx context.Context) (DiagnosticsResponse, error) {
 }
 
 func (c *Client) getJSON(ctx context.Context, path string, target any) error {
+	return c.doJSON(ctx, http.MethodGet, path, nil, target)
+}
+
+func (c *Client) doJSON(ctx context.Context, method string, path string, payload []byte, target any) error {
 	if c == nil {
 		return fmt.Errorf("daemon client is nil")
 	}
@@ -58,9 +88,16 @@ func (c *Client) getJSON(ctx context.Context, path string, target any) error {
 	if client == nil {
 		client = unixHTTPClient(c.SocketPath)
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://big-red-button"+path, nil)
+	var body io.Reader
+	if payload != nil {
+		body = bytes.NewReader(payload)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, "http://big-red-button"+path, body)
 	if err != nil {
 		return err
+	}
+	if payload != nil {
+		request.Header.Set("Content-Type", "application/json")
 	}
 	response, err := client.Do(request)
 	if err != nil {

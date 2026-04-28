@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -14,14 +15,32 @@ import (
 
 	"github.com/MyHeartRaces/BigRedButton/internal/buildinfo"
 	"github.com/MyHeartRaces/BigRedButton/internal/planner"
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
 	truntime "github.com/MyHeartRaces/BigRedButton/internal/runtime"
 	"github.com/MyHeartRaces/BigRedButton/internal/status"
 )
 
 const DefaultSocketPath = "/run/big-red-button/launcher.sock"
+const maxProfilePayloadBytes = 4 << 20
 
 type Options struct {
 	RuntimeRoot string
+}
+
+type ValidateProfileResponse struct {
+	Valid   bool             `json:"valid"`
+	Summary *profile.Summary `json:"summary,omitempty"`
+	Errors  []string         `json:"errors,omitempty"`
+}
+
+type PlanConnectRequest struct {
+	Profile json.RawMessage `json:"profile"`
+	Options planner.Options `json:"options,omitempty"`
+}
+
+type PlanConnectResponse struct {
+	Plan   *planner.Plan `json:"plan,omitempty"`
+	Errors []string      `json:"errors,omitempty"`
 }
 
 type HealthResponse struct {
@@ -66,6 +85,61 @@ func NewHandler(options Options) http.Handler {
 			return
 		}
 		writeJSON(w, collectStatus(r.Context(), runtimeRoot))
+	})
+	mux.HandleFunc("/v1/profile/validate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSONStatus(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		payload, err := readLimitedBody(r.Body, maxProfilePayloadBytes)
+		if err != nil {
+			writeJSONStatus(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		config, err := profile.ParseWGWS(payload)
+		if err != nil {
+			if validationErr, ok := profile.AsValidationError(err); ok {
+				writeJSON(w, ValidateProfileResponse{Valid: false, Errors: validationErr.Problems})
+				return
+			}
+			writeJSONStatus(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		summary := config.Summary()
+		writeJSON(w, ValidateProfileResponse{Valid: true, Summary: &summary})
+	})
+	mux.HandleFunc("/v1/plan/connect", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSONStatus(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			return
+		}
+		var request PlanConnectRequest
+		if err := json.NewDecoder(io.LimitReader(r.Body, maxProfilePayloadBytes)).Decode(&request); err != nil {
+			writeJSONStatus(w, http.StatusBadRequest, map[string]string{"error": "decode request: " + err.Error()})
+			return
+		}
+		if len(request.Profile) == 0 {
+			writeJSONStatus(w, http.StatusBadRequest, PlanConnectResponse{Errors: []string{"profile payload is required"}})
+			return
+		}
+		config, err := profile.ParseWGWS(request.Profile)
+		if err != nil {
+			if validationErr, ok := profile.AsValidationError(err); ok {
+				writeJSONStatus(w, http.StatusBadRequest, PlanConnectResponse{Errors: validationErr.Problems})
+				return
+			}
+			writeJSONStatus(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		if request.Options.RuntimeRoot == "" {
+			request.Options.RuntimeRoot = runtimeRoot
+		}
+		plan, err := planner.Connect(config, request.Options)
+		if err != nil {
+			writeJSONStatus(w, http.StatusBadRequest, PlanConnectResponse{Errors: []string{err.Error()}})
+			return
+		}
+		writeJSON(w, PlanConnectResponse{Plan: &plan})
 	})
 	mux.HandleFunc("/v1/diagnostics", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -143,6 +217,20 @@ func collectStatus(ctx context.Context, runtimeRoot string) StatusResponse {
 	}
 	response.IsolatedSessions = sessions
 	return response
+}
+
+func readLimitedBody(reader io.Reader, limit int64) ([]byte, error) {
+	payload, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return nil, fmt.Errorf("read request body: %w", err)
+	}
+	if int64(len(payload)) > limit {
+		return nil, fmt.Errorf("request body is too large")
+	}
+	if len(strings.TrimSpace(string(payload))) == 0 {
+		return nil, fmt.Errorf("request body is required")
+	}
+	return payload, nil
 }
 
 func writeJSON(w http.ResponseWriter, value any) {
