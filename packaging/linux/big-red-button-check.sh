@@ -99,6 +99,11 @@ if command -v big-red-button >/dev/null 2>&1; then
   else
     fail "big-red-button version"
   fi
+  if big-red-button daemon-status >/dev/null 2>&1; then
+    ok "big-red-button daemon-status"
+  else
+    warn "big-red-button daemon-status failed; restart big-red-buttond.service"
+  fi
 fi
 
 if [[ -n "${profile}" ]]; then

@@ -283,9 +283,12 @@ func ServeUnixWithMode(ctx context.Context, socketPath string, handler http.Hand
 	if handler == nil {
 		return fmt.Errorf("daemon handler is required")
 	}
-	if err := os.MkdirAll(filepath.Dir(socketPath), 0o700); err != nil {
+	socketDir := filepath.Dir(socketPath)
+	socketDirMode := socketDirectoryMode(socketMode)
+	if err := os.MkdirAll(socketDir, socketDirMode); err != nil {
 		return fmt.Errorf("create socket directory: %w", err)
 	}
+	_ = os.Chmod(socketDir, socketDirMode)
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove stale socket: %w", err)
 	}
@@ -329,6 +332,13 @@ func ServeUnixWithMode(ctx context.Context, socketPath string, handler http.Hand
 	case err := <-errCh:
 		return err
 	}
+}
+
+func socketDirectoryMode(socketMode os.FileMode) os.FileMode {
+	if socketMode&0o077 != 0 {
+		return 0o755
+	}
+	return 0o700
 }
 
 func collectStatus(ctx context.Context, runtimeRoot string) StatusResponse {

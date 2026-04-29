@@ -96,13 +96,15 @@ Launch **Big Red Button** from the application menu.
 In the GUI:
 
 1. Save Profile.
-2. Leave `Tunnel helper binary` as `/usr/lib/big-red-button/wstunnel` unless
+2. If the selected JSON is a sing-box WireGuard attachment, paste the
+   `wss://host:443/path` WSTunnel target into `WSTunnel target URL`.
+3. Leave `Tunnel helper binary` as `/usr/lib/big-red-button/wstunnel` unless
    you want to test another helper build.
-3. Run `Preflight`.
-4. Run `Connect`.
-5. Check status.
-6. Run `Disconnect`.
-7. Run `Bundle` and keep the diagnostics archive.
+4. Run `Preflight`.
+5. Run `Connect`.
+6. Check status.
+7. Run `Disconnect`.
+8. Run `Bundle` and keep the diagnostics archive.
 
 ## 8. CLI Real Connect Smoke
 

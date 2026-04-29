@@ -1,7 +1,7 @@
 pkgbase = big-red-button
 	pkgdesc = Desktop VPN launcher
 	pkgver = 0.2.1
-	pkgrel = 2
+	pkgrel = 3
 	url = https://github.com/MyHeartRaces/BigRedButton
 	arch = x86_64
 	arch = aarch64

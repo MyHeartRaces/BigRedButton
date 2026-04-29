@@ -44,6 +44,118 @@ func TestParseWGWSValidFixture(t *testing.T) {
 	}
 }
 
+func TestParseWGWSAcceptsNeutralProfileName(t *testing.T) {
+	raw := strings.Replace(validProfileJSON(), legacyWGWSProfileName, "Big Red Button", 1)
+
+	config, err := ParseWGWS([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Name != "Big Red Button" {
+		t.Fatalf("unexpected profile name: %s", config.Name)
+	}
+}
+
+func TestParseWGWSAcceptsSingBoxWireGuardOutbound(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/profiles/valid-singbox-wgws.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := ParseWGWS(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Name != "wgws-out" {
+		t.Fatalf("unexpected profile name: %s", config.Name)
+	}
+	if config.WSTunnelURL != "wss://edge.example.com:443/cdn/ws" {
+		t.Fatalf("unexpected wstunnel URL: %s", config.WSTunnelURL)
+	}
+	if config.LocalUDPListen != "127.0.0.1:51820" {
+		t.Fatalf("unexpected local UDP: %s", config.LocalUDPListen)
+	}
+	if config.ServerPublicKey != "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=" {
+		t.Fatalf("unexpected server public key: %s", config.ServerPublicKey)
+	}
+	if got := config.AllowedIPs; len(got) != 2 || got[0] != "0.0.0.0/0" || got[1] != "::/0" {
+		t.Fatalf("unexpected allowed IPs: %#v", got)
+	}
+	if config.MTU != 1280 || config.PersistentKeepalive != 25 {
+		t.Fatalf("unexpected mtu/keepalive: %d/%d", config.MTU, config.PersistentKeepalive)
+	}
+}
+
+func TestParseWGWSAcceptsTracegateSingBoxAttachmentWithWSTunnelMetadata(t *testing.T) {
+	raw := `{
+	  "log": {"level": "warn"},
+	  "inbounds": [{"type": "mixed", "tag": "local-in", "listen": "127.0.0.1", "listen_port": 18083}],
+	  "outbounds": [
+	    {
+	      "type": "wireguard",
+	      "tag": "proxy",
+	      "server": "127.0.0.1",
+	      "server_port": 51820,
+	      "local_address": ["10.70.0.2/32"],
+	      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+	      "peer_public_key": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
+	      "pre_shared_key": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=",
+	      "mtu": 1280
+	    }
+	  ],
+	  "route": {"auto_detect_interface": true, "final": "proxy"},
+	  "wstunnel": {"url": "wss://edge.example.com:443/cdn/ws"}
+	}`
+
+	config, err := ParseWGWS([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Server != "edge.example.com" || config.WSTunnelHost != "edge.example.com" {
+		t.Fatalf("unexpected server fields: server=%s wstunnel=%s", config.Server, config.WSTunnelHost)
+	}
+	if config.LocalUDPListen != "127.0.0.1:51820" {
+		t.Fatalf("unexpected local UDP: %s", config.LocalUDPListen)
+	}
+	if got := config.AllowedIPs; len(got) != 2 || got[0] != "0.0.0.0/0" || got[1] != "::/0" {
+		t.Fatalf("unexpected default allowed IPs: %#v", got)
+	}
+	if config.PersistentKeepalive != 25 {
+		t.Fatalf("unexpected keepalive: %d", config.PersistentKeepalive)
+	}
+}
+
+func TestParseWGWSReportsSingBoxMissingWSTunnel(t *testing.T) {
+	raw := `{
+	  "outbounds": [
+	    {
+	      "type": "wireguard",
+	      "tag": "plain-wg",
+	      "server": "198.51.100.10",
+	      "server_port": 51820,
+	      "local_address": ["10.70.0.2/32"],
+	      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+	      "peer_public_key": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
+	      "pre_shared_key": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=",
+	      "peers": [{"allowed_ips": ["0.0.0.0/0"]}]
+	    }
+	  ]
+	}`
+
+	_, err := ParseWGWS([]byte(raw))
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	validationErr, ok := AsValidationError(err)
+	if !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+	joined := strings.Join(validationErr.Problems, "\n")
+	if !strings.Contains(joined, "sing-box WireGuard config requires WSTunnel URL") {
+		t.Fatalf("missing WSTunnel import error: %s", joined)
+	}
+}
+
 func TestSummaryDoesNotExposeSecrets(t *testing.T) {
 	data, err := os.ReadFile("../../testdata/profiles/valid-wgws.json")
 	if err != nil {
@@ -112,24 +224,16 @@ func TestParseWGWSRejectsPlaceholders(t *testing.T) {
 	}
 }
 
-func TestParseWGWSRejectsUnsupportedProfileWithoutLegacyName(t *testing.T) {
+func TestParseWGWSAcceptsProfileWithoutLegacyName(t *testing.T) {
 	raw := validProfileJSON()
 	raw = strings.Replace(raw, legacyWGWSProfileName, "unsupported-profile", 1)
 
-	_, err := ParseWGWS([]byte(raw))
-	if err == nil {
-		t.Fatal("expected validation error")
+	config, err := ParseWGWS([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
 	}
-	validationErr, ok := AsValidationError(err)
-	if !ok {
-		t.Fatalf("expected ValidationError, got %T", err)
-	}
-	joined := strings.Join(validationErr.Problems, "\n")
-	if !strings.Contains(joined, "profile type is not supported") {
-		t.Fatalf("missing unsupported profile error: %s", joined)
-	}
-	if strings.Contains(joined, "V7") {
-		t.Fatalf("validation error leaked legacy profile name: %s", joined)
+	if config.Name != "unsupported-profile" {
+		t.Fatalf("profile name should be accepted without legacy coupling: %s", config.Name)
 	}
 }
 

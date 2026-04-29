@@ -94,6 +94,11 @@ browser. It can save a local VPN profile, show redacted profile details, show
 runtime status, and on Linux run guarded connect/disconnect commands through
 the CLI.
 
+When importing a sing-box WireGuard attachment that points to a local WSTunnel
+UDP listener, paste the external `wss://host:443/path` WSTunnel target into the
+GUI profile form before saving. Native Big Red Button profiles already contain
+that URL.
+
 On Linux the GUI uses `pkexec` for privileged actions, so desktop environments
 can show a graphical privilege prompt. The Linux package installs a polkit
 action for `/usr/bin/big-red-button` so the prompt uses the application name
@@ -426,7 +431,8 @@ Isolated session state is stored under
 
 The expected profile is a normalized JSON VPN profile for the currently
 supported WGWS adapter. See `testdata/profiles/valid-wgws.json` for the current
-schema.
+schema. The parser also accepts compatible sing-box WireGuard JSON when the
+WSTunnel target URL is present as metadata or supplied during GUI import.
 
 The planner and runtime status never print private keys. The WireGuard executor
 does write a temporary `wg setconf` file with private key material while

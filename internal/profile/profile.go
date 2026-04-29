@@ -19,6 +19,9 @@ import (
 const (
 	DisplayProfileType    = "WGWS"
 	legacyWGWSProfileName = "V7-WireGuard-WSTunnel-Direct"
+	defaultLocalUDPListen = "127.0.0.1:51820"
+	defaultWGWSMTU        = 1280
+	defaultWGKeepalive    = 25
 )
 
 type Config struct {
@@ -93,6 +96,9 @@ func ParseWGWS(data []byte) (Config, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return Config{}, fmt.Errorf("parse profile json: %w", err)
 	}
+	if config, ok, err := parseSingBoxWGWS(data); ok {
+		return config, err
+	}
 	return normalize(raw)
 }
 
@@ -147,16 +153,29 @@ func (c Config) Fingerprint() string {
 }
 
 type rawConfig struct {
-	Protocol  string        `json:"protocol"`
-	Transport string        `json:"transport"`
-	Name      string        `json:"profile"`
-	Server    string        `json:"server"`
-	Port      *int          `json:"port"`
-	SNI       string        `json:"sni"`
-	WSTunnel  rawWSTunnel   `json:"wstunnel"`
-	WireGuard rawWireGuard  `json:"wireguard"`
-	LocalSock any           `json:"local_socks"`
-	Extra     []interface{} `json:"-"`
+	Protocol         string        `json:"protocol"`
+	Transport        string        `json:"transport"`
+	Name             string        `json:"profile"`
+	Server           string        `json:"server"`
+	Port             *int          `json:"port"`
+	SNI              string        `json:"sni"`
+	WSTunnelURL      string        `json:"wstunnel_url"`
+	WSTunnelPath     string        `json:"wstunnel_path"`
+	WSTunnelTLSName  string        `json:"wstunnel_tls_server_name"`
+	LocalUDPListen   string        `json:"local_udp_listen"`
+	WireGuardPrivKey string        `json:"wireguard_private_key"`
+	WireGuardPubKey  string        `json:"wireguard_public_key"`
+	ServerPubKey     string        `json:"wireguard_server_public_key"`
+	PresharedKey     string        `json:"wireguard_preshared_key"`
+	Addresses        any           `json:"addresses"`
+	AllowedIPs       any           `json:"allowed_ips"`
+	DNS              string        `json:"dns"`
+	MTU              *int          `json:"mtu"`
+	Keepalive        *int          `json:"persistent_keepalive"`
+	WSTunnel         rawWSTunnel   `json:"wstunnel"`
+	WireGuard        rawWireGuard  `json:"wireguard"`
+	LocalSock        any           `json:"local_socks"`
+	Extra            []interface{} `json:"-"`
 }
 
 type rawWSTunnel struct {
@@ -186,31 +205,36 @@ func normalize(raw rawConfig) (Config, error) {
 	}
 
 	protocol := strings.ToLower(strings.TrimSpace(raw.Protocol))
+	if protocol == "" && looksLikeWGWSProfile(raw) {
+		protocol = "wireguard"
+	}
 	if protocol != "wireguard" {
 		addProblem("protocol must be wireguard")
 	}
 
 	transport := strings.ToLower(strings.TrimSpace(raw.Transport))
+	if transport == "" && looksLikeWGWSProfile(raw) {
+		transport = "wstunnel"
+	}
 	if transport != "wstunnel" {
 		addProblem("transport must be wstunnel")
 	}
 
 	name := strings.TrimSpace(raw.Name)
-	if name != legacyWGWSProfileName {
-		addProblem("profile type is not supported")
+	if name == "" {
+		name = DisplayProfileType
 	}
 
 	port := 443
-	if raw.Port == nil {
-		addProblem("port is required and must be 443")
-	} else if *raw.Port != 443 {
+	if raw.Port != nil && *raw.Port != 443 {
 		addProblem("port must be 443")
-	} else {
+	} else if raw.Port != nil {
 		port = *raw.Port
 	}
 
-	wstunnelURL, wstunnelPath, wstunnelHost := normalizeWSTunnelURL(raw.WSTunnel.URL, &problems)
-	rawPath := strings.TrimSpace(raw.WSTunnel.Path)
+	wstunnelRaw := mergeWSTunnel(raw.WSTunnel, raw)
+	wstunnelURL, wstunnelPath, wstunnelHost := normalizeWSTunnelURL(wstunnelRaw.URL, &problems)
+	rawPath := strings.TrimSpace(wstunnelRaw.Path)
 	if rawPath != "" {
 		if !validHTTPPath(rawPath) {
 			addProblem("wstunnel.path must be a clean absolute HTTP path")
@@ -226,25 +250,30 @@ func normalize(raw rawConfig) (Config, error) {
 		addProblem("wstunnel.mode must be wireguard-over-websocket")
 	}
 
-	localUDP := normalizeLoopbackEndpoint(raw.WSTunnel.LocalUDPListen, "wstunnel.local_udp_listen", &problems)
+	localUDP := strings.TrimSpace(wstunnelRaw.LocalUDPListen)
+	if localUDP == "" && looksLikeWGWSProfile(raw) {
+		localUDP = defaultLocalUDPListen
+	}
+	localUDP = normalizeLoopbackEndpoint(localUDP, "wstunnel.local_udp_listen", &problems)
 
-	privateKey := strings.TrimSpace(raw.WireGuard.PrivateKey)
+	wireguardRaw := mergeWireGuard(raw.WireGuard, raw)
+	privateKey := strings.TrimSpace(wireguardRaw.PrivateKey)
 	validateRequiredWGKey(privateKey, "wireguard.private_key", &problems)
 
-	publicKey := strings.TrimSpace(raw.WireGuard.PublicKey)
+	publicKey := strings.TrimSpace(wireguardRaw.PublicKey)
 	if publicKey != "" {
 		validateWGKey(publicKey, "wireguard.public_key", &problems)
 	}
 
-	serverPublicKey := strings.TrimSpace(raw.WireGuard.ServerPublicKey)
+	serverPublicKey := strings.TrimSpace(wireguardRaw.ServerPublicKey)
 	validateRequiredWGKey(serverPublicKey, "wireguard.server_public_key", &problems)
 
-	presharedKey := strings.TrimSpace(raw.WireGuard.PresharedKey)
+	presharedKey := strings.TrimSpace(wireguardRaw.PresharedKey)
 	if presharedKey != "" {
 		validateWGKey(presharedKey, "wireguard.preshared_key", &problems)
 	}
 
-	addresses := normalizeStringList(raw.WireGuard.Address)
+	addresses := normalizeStringList(wireguardRaw.Address)
 	if len(addresses) == 0 {
 		addProblem("wireguard.address is required")
 	}
@@ -254,7 +283,7 @@ func normalize(raw rawConfig) (Config, error) {
 		}
 	}
 
-	allowedIPs := normalizeStringList(raw.WireGuard.AllowedIPs)
+	allowedIPs := normalizeStringList(wireguardRaw.AllowedIPs)
 	if len(allowedIPs) == 0 {
 		addProblem("wireguard.allowed_ips is required")
 	}
@@ -265,20 +294,28 @@ func normalize(raw rawConfig) (Config, error) {
 	}
 
 	mtu := 0
-	if raw.WireGuard.MTU == nil {
-		addProblem("wireguard.mtu is required")
+	if wireguardRaw.MTU == nil {
+		if looksLikeWGWSProfile(raw) {
+			mtu = defaultWGWSMTU
+		} else {
+			addProblem("wireguard.mtu is required")
+		}
 	} else {
-		mtu = *raw.WireGuard.MTU
+		mtu = *wireguardRaw.MTU
 		if mtu < 1200 || mtu > 1420 {
 			addProblem("wireguard.mtu must be in 1200..1420")
 		}
 	}
 
 	keepalive := 0
-	if raw.WireGuard.PersistentKeepalive == nil {
-		addProblem("wireguard.persistent_keepalive is required")
+	if wireguardRaw.PersistentKeepalive == nil {
+		if looksLikeWGWSProfile(raw) {
+			keepalive = defaultWGKeepalive
+		} else {
+			addProblem("wireguard.persistent_keepalive is required")
+		}
 	} else {
-		keepalive = *raw.WireGuard.PersistentKeepalive
+		keepalive = *wireguardRaw.PersistentKeepalive
 		if keepalive < 0 || keepalive > 60 {
 			addProblem("wireguard.persistent_keepalive must be in 0..60")
 		}
@@ -303,7 +340,7 @@ func normalize(raw rawConfig) (Config, error) {
 		WSTunnelHost:        wstunnelHost,
 		WSTunnelURL:         wstunnelURL,
 		WSTunnelPath:        rawPath,
-		WSTunnelTLSName:     strings.TrimSpace(raw.WSTunnel.TLSServerName),
+		WSTunnelTLSName:     strings.TrimSpace(wstunnelRaw.TLSServerName),
 		LocalUDPListen:      localUDP,
 		WireGuardPrivateKey: privateKey,
 		WireGuardPublicKey:  publicKey,
@@ -311,10 +348,328 @@ func normalize(raw rawConfig) (Config, error) {
 		PresharedKey:        presharedKey,
 		Addresses:           addresses,
 		AllowedIPs:          allowedIPs,
-		DNS:                 strings.TrimSpace(raw.WireGuard.DNS),
+		DNS:                 strings.TrimSpace(wireguardRaw.DNS),
 		MTU:                 mtu,
 		PersistentKeepalive: keepalive,
 	}, nil
+}
+
+func looksLikeWGWSProfile(raw rawConfig) bool {
+	return strings.TrimSpace(raw.WSTunnel.URL) != "" ||
+		strings.TrimSpace(raw.WSTunnelURL) != "" ||
+		strings.TrimSpace(raw.WireGuard.PrivateKey) != "" ||
+		strings.TrimSpace(raw.WireGuardPrivKey) != ""
+}
+
+func mergeWSTunnel(nested rawWSTunnel, raw rawConfig) rawWSTunnel {
+	if strings.TrimSpace(nested.URL) == "" {
+		nested.URL = raw.WSTunnelURL
+	}
+	if strings.TrimSpace(nested.Path) == "" {
+		nested.Path = raw.WSTunnelPath
+	}
+	if strings.TrimSpace(nested.TLSServerName) == "" {
+		nested.TLSServerName = raw.WSTunnelTLSName
+	}
+	if strings.TrimSpace(nested.LocalUDPListen) == "" {
+		nested.LocalUDPListen = raw.LocalUDPListen
+	}
+	return nested
+}
+
+func mergeWireGuard(nested rawWireGuard, raw rawConfig) rawWireGuard {
+	if strings.TrimSpace(nested.PrivateKey) == "" {
+		nested.PrivateKey = raw.WireGuardPrivKey
+	}
+	if strings.TrimSpace(nested.PublicKey) == "" {
+		nested.PublicKey = raw.WireGuardPubKey
+	}
+	if strings.TrimSpace(nested.ServerPublicKey) == "" {
+		nested.ServerPublicKey = raw.ServerPubKey
+	}
+	if strings.TrimSpace(nested.PresharedKey) == "" {
+		nested.PresharedKey = raw.PresharedKey
+	}
+	if nested.Address == nil {
+		nested.Address = raw.Addresses
+	}
+	if nested.AllowedIPs == nil {
+		nested.AllowedIPs = raw.AllowedIPs
+	}
+	if strings.TrimSpace(nested.DNS) == "" {
+		nested.DNS = raw.DNS
+	}
+	if nested.MTU == nil {
+		nested.MTU = raw.MTU
+	}
+	if nested.PersistentKeepalive == nil {
+		nested.PersistentKeepalive = raw.Keepalive
+	}
+	return nested
+}
+
+type singBoxConfig struct {
+	Outbounds []singBoxWireGuard `json:"outbounds"`
+	Endpoints []singBoxWireGuard `json:"endpoints"`
+	WSTunnel  rawWSTunnel        `json:"wstunnel"`
+}
+
+type singBoxWireGuard struct {
+	Type                  string                 `json:"type"`
+	Tag                   string                 `json:"tag"`
+	Server                string                 `json:"server"`
+	ServerPort            *int                   `json:"server_port"`
+	System                bool                   `json:"system"`
+	SystemInterface       bool                   `json:"system_interface"`
+	InterfaceName         string                 `json:"interface_name"`
+	Name                  string                 `json:"name"`
+	LocalAddress          any                    `json:"local_address"`
+	Address               any                    `json:"address"`
+	PrivateKey            string                 `json:"private_key"`
+	PeerPublicKey         string                 `json:"peer_public_key"`
+	ServerPublicKey       string                 `json:"server_public_key"`
+	PreSharedKey          string                 `json:"pre_shared_key"`
+	PresharedKey          string                 `json:"preshared_key"`
+	AllowedIPs            any                    `json:"allowed_ips"`
+	MTU                   *int                   `json:"mtu"`
+	PersistentKeepalive   *int                   `json:"persistent_keepalive"`
+	KeepaliveInterval     *int                   `json:"persistent_keepalive_interval"`
+	Peers                 []singBoxWireGuardPeer `json:"peers"`
+	WSTunnel              rawWSTunnel            `json:"wstunnel"`
+	Transport             singBoxTransport       `json:"transport"`
+	TLS                   singBoxTLS             `json:"tls"`
+	DNS                   string                 `json:"dns"`
+	DomainResolver        string                 `json:"domain_resolver"`
+	LegacyDomainResolver  string                 `json:"domain_strategy"`
+	UnsupportedRawPayload map[string]any         `json:"-"`
+}
+
+type singBoxWireGuardPeer struct {
+	Server                      string `json:"server"`
+	ServerPort                  *int   `json:"server_port"`
+	Address                     string `json:"address"`
+	Port                        *int   `json:"port"`
+	PublicKey                   string `json:"public_key"`
+	PeerPublicKey               string `json:"peer_public_key"`
+	ServerPublicKey             string `json:"server_public_key"`
+	PreSharedKey                string `json:"pre_shared_key"`
+	PresharedKey                string `json:"preshared_key"`
+	AllowedIPs                  any    `json:"allowed_ips"`
+	PersistentKeepalive         *int   `json:"persistent_keepalive"`
+	PersistentKeepaliveInterval *int   `json:"persistent_keepalive_interval"`
+}
+
+type singBoxTransport struct {
+	Type string `json:"type"`
+	Path string `json:"path"`
+}
+
+type singBoxTLS struct {
+	Enabled    bool   `json:"enabled"`
+	ServerName string `json:"server_name"`
+}
+
+func parseSingBoxWGWS(data []byte) (Config, bool, error) {
+	var raw singBoxConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return Config{}, false, nil
+	}
+	wireguard, found := firstSingBoxWireGuard(raw)
+	if !found {
+		return Config{}, len(raw.Outbounds) > 0 || len(raw.Endpoints) > 0, &ValidationError{Problems: []string{"sing-box config does not contain a WireGuard outbound or endpoint"}}
+	}
+
+	peer := firstSingBoxPeer(wireguard)
+	wstunnel := mergeSingBoxWSTunnel(raw.WSTunnel, wireguard)
+	if strings.TrimSpace(wstunnel.URL) == "" {
+		wstunnel.URL = singBoxTransportWSTunnelURL(wireguard, peer)
+	}
+	if strings.TrimSpace(wstunnel.URL) == "" {
+		return Config{}, true, &ValidationError{Problems: []string{"sing-box WireGuard config requires WSTunnel URL or websocket transport metadata"}}
+	}
+	if strings.TrimSpace(wstunnel.Path) == "" {
+		if _, path, _ := normalizeWSTunnelURL(wstunnel.URL, &[]string{}); path != "" {
+			wstunnel.Path = path
+		}
+	}
+	if strings.TrimSpace(wstunnel.TLSServerName) == "" {
+		wstunnel.TLSServerName = strings.TrimSpace(wireguard.TLS.ServerName)
+	}
+	if strings.TrimSpace(wstunnel.LocalUDPListen) == "" {
+		wstunnel.LocalUDPListen = singBoxLocalUDPListen(wireguard, peer)
+	}
+
+	mtu := wireguard.MTU
+	if mtu == nil {
+		mtu = intPointer(defaultWGWSMTU)
+	}
+	keepalive := firstIntPointer(wireguard.PersistentKeepalive, wireguard.KeepaliveInterval, peer.PersistentKeepalive, peer.PersistentKeepaliveInterval, intPointer(defaultWGKeepalive))
+	serverPublicKey := firstNonEmpty(peer.PublicKey, peer.PeerPublicKey, peer.ServerPublicKey, wireguard.PeerPublicKey, wireguard.ServerPublicKey)
+	presharedKey := firstNonEmpty(peer.PreSharedKey, peer.PresharedKey, wireguard.PreSharedKey, wireguard.PresharedKey)
+	allowedIPs := firstAny(peer.AllowedIPs, wireguard.AllowedIPs)
+	if allowedIPs == nil {
+		allowedIPs = []string{"0.0.0.0/0", "::/0"}
+	}
+	addresses := firstAny(wireguard.LocalAddress, wireguard.Address)
+
+	native := rawConfig{
+		Protocol:  "wireguard",
+		Transport: "wstunnel",
+		Name:      firstNonEmpty(wireguard.Tag, wireguard.Name, wireguard.InterfaceName, DisplayProfileType),
+		Server:    singBoxServerForProfile(wireguard, peer),
+		Port:      intPointer(443),
+		SNI:       strings.TrimSpace(wireguard.TLS.ServerName),
+		WSTunnel:  wstunnel,
+		WireGuard: rawWireGuard{
+			PrivateKey:          wireguard.PrivateKey,
+			ServerPublicKey:     serverPublicKey,
+			PresharedKey:        presharedKey,
+			Address:             addresses,
+			AllowedIPs:          allowedIPs,
+			DNS:                 strings.TrimSpace(wireguard.DNS),
+			MTU:                 mtu,
+			PersistentKeepalive: keepalive,
+		},
+	}
+	config, err := normalize(native)
+	return config, true, err
+}
+
+func firstSingBoxWireGuard(raw singBoxConfig) (singBoxWireGuard, bool) {
+	for _, outbound := range raw.Outbounds {
+		if strings.EqualFold(strings.TrimSpace(outbound.Type), "wireguard") {
+			return outbound, true
+		}
+	}
+	for _, endpoint := range raw.Endpoints {
+		if strings.EqualFold(strings.TrimSpace(endpoint.Type), "wireguard") {
+			return endpoint, true
+		}
+	}
+	return singBoxWireGuard{}, false
+}
+
+func singBoxServerForProfile(wireguard singBoxWireGuard, peer singBoxWireGuardPeer) string {
+	server := firstNonEmpty(peer.Server, peer.Address, wireguard.Server)
+	if isLoopbackHost(server) {
+		return ""
+	}
+	return server
+}
+
+func firstSingBoxPeer(wireguard singBoxWireGuard) singBoxWireGuardPeer {
+	if len(wireguard.Peers) == 0 {
+		return singBoxWireGuardPeer{}
+	}
+	return wireguard.Peers[0]
+}
+
+func mergeSingBoxWSTunnel(global rawWSTunnel, wireguard singBoxWireGuard) rawWSTunnel {
+	wstunnel := global
+	if strings.TrimSpace(wstunnel.URL) == "" {
+		wstunnel.URL = wireguard.WSTunnel.URL
+	}
+	if strings.TrimSpace(wstunnel.Path) == "" {
+		wstunnel.Path = wireguard.WSTunnel.Path
+	}
+	if strings.TrimSpace(wstunnel.TLSServerName) == "" {
+		wstunnel.TLSServerName = wireguard.WSTunnel.TLSServerName
+	}
+	if strings.TrimSpace(wstunnel.LocalUDPListen) == "" {
+		wstunnel.LocalUDPListen = wireguard.WSTunnel.LocalUDPListen
+	}
+	if strings.TrimSpace(wstunnel.Mode) == "" {
+		wstunnel.Mode = wireguard.WSTunnel.Mode
+	}
+	return wstunnel
+}
+
+func singBoxTransportWSTunnelURL(wireguard singBoxWireGuard, peer singBoxWireGuardPeer) string {
+	transportType := strings.ToLower(strings.TrimSpace(wireguard.Transport.Type))
+	if transportType != "ws" && transportType != "websocket" {
+		return ""
+	}
+	host := firstNonEmpty(peer.Server, peer.Address, wireguard.Server)
+	if host == "" {
+		return ""
+	}
+	port := firstInt(peer.ServerPort, peer.Port, wireguard.ServerPort)
+	if port == 0 {
+		port = 443
+	}
+	if port != 443 {
+		return ""
+	}
+	path := strings.TrimSpace(wireguard.Transport.Path)
+	if path == "" {
+		path = "/"
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return "wss://" + net.JoinHostPort(host, strconv.Itoa(port)) + path
+}
+
+func singBoxLocalUDPListen(wireguard singBoxWireGuard, peer singBoxWireGuardPeer) string {
+	port := firstInt(wireguard.ServerPort, peer.Port, peer.ServerPort)
+	if port < 1 || port > 65535 || port == 443 {
+		port = 51820
+	}
+	return net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+}
+
+func isLoopbackHost(value string) bool {
+	host := strings.TrimSpace(value)
+	if host == "" {
+		return false
+	}
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	addr, err := netip.ParseAddr(host)
+	return err == nil && addr.IsLoopback()
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstAny(values ...any) any {
+	for _, value := range values {
+		if len(normalizeStringList(value)) > 0 {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstInt(values ...*int) int {
+	if value := firstIntPointer(values...); value != nil {
+		return *value
+	}
+	return 0
+}
+
+func firstIntPointer(values ...*int) *int {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func intPointer(value int) *int {
+	return &value
 }
 
 func normalizeWSTunnelURL(raw string, problems *[]string) (string, string, string) {

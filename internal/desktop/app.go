@@ -230,10 +230,22 @@ func (a *app) profile(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "read profile: " + err.Error()})
 		return
 	}
-	config, err := profile.ParseWGWS(payload)
+	payloadToSave := payload
+	config, err := profile.ParseWGWS(payloadToSave)
 	if err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "profile invalid: " + err.Error()})
-		return
+		wstunnelURL := strings.TrimSpace(r.FormValue("wstunnel_url"))
+		if wstunnelURL != "" {
+			payloadToSave, err = profilePayloadWithWSTunnelURL(payload, wstunnelURL)
+			if err != nil {
+				writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: "apply WSTunnel URL: " + err.Error()})
+				return
+			}
+			config, err = profile.ParseWGWS(payloadToSave)
+		}
+		if err != nil {
+			writeJSONStatus(w, http.StatusBadRequest, actionResponse{Error: profileUploadError(err)})
+			return
+		}
 	}
 
 	profileDir := filepath.Join(a.configDir, "profiles")
@@ -242,7 +254,7 @@ func (a *app) profile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := filepath.Join(profileDir, "current.json")
-	if err := os.WriteFile(path, payload, 0o600); err != nil {
+	if err := os.WriteFile(path, payloadToSave, 0o600); err != nil {
 		writeJSONStatus(w, http.StatusInternalServerError, actionResponse{Error: "save profile: " + err.Error()})
 		return
 	}
@@ -256,6 +268,55 @@ func (a *app) profile(w http.ResponseWriter, r *http.Request) {
 	_ = a.saveState(state)
 
 	writeJSON(w, a.statusPayload(r.Context()))
+}
+
+func profilePayloadWithWSTunnelURL(payload []byte, wstunnelURL string) ([]byte, error) {
+	wstunnelURL = strings.TrimSpace(wstunnelURL)
+	if wstunnelURL == "" {
+		return nil, errors.New("WSTunnel URL is required")
+	}
+	var root map[string]any
+	if err := json.Unmarshal(payload, &root); err != nil {
+		return nil, fmt.Errorf("parse profile json: %w", err)
+	}
+	wstunnel, ok := root["wstunnel"].(map[string]any)
+	if !ok {
+		wstunnel = map[string]any{}
+	}
+	wstunnel["url"] = wstunnelURL
+	mode, _ := wstunnel["mode"].(string)
+	if strings.TrimSpace(mode) == "" {
+		wstunnel["mode"] = "wireguard-over-websocket"
+	}
+	root["wstunnel"] = wstunnel
+	encoded, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode profile json: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	return encoded, nil
+}
+
+func profileUploadError(err error) string {
+	message := "profile invalid: " + err.Error()
+	if profileValidationNeedsWSTunnelURL(err) {
+		message += "; paste the WSTunnel target URL and save again"
+	}
+	return message
+}
+
+func profileValidationNeedsWSTunnelURL(err error) bool {
+	validationErr, ok := profile.AsValidationError(err)
+	if !ok {
+		return false
+	}
+	for _, problem := range validationErr.Problems {
+		problem = strings.ToLower(problem)
+		if strings.Contains(problem, "wstunnel url") || strings.Contains(problem, "wstunnel.url") {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *app) connect(w http.ResponseWriter, r *http.Request) {

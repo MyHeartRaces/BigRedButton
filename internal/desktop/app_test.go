@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MyHeartRaces/BigRedButton/internal/profile"
 	"github.com/MyHeartRaces/BigRedButton/internal/status"
 )
 
@@ -204,6 +205,39 @@ func TestIsolatedSnapshotByID(t *testing.T) {
 	}
 }
 
+func TestProfilePayloadWithWSTunnelURLSupportsTracegateSingBoxAttachment(t *testing.T) {
+	raw := `{
+	  "outbounds": [
+	    {
+	      "type": "wireguard",
+	      "tag": "proxy",
+	      "server": "127.0.0.1",
+	      "server_port": 51820,
+	      "local_address": ["10.70.0.2/32"],
+	      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+	      "peer_public_key": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
+	      "pre_shared_key": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=",
+	      "mtu": 1280
+	    }
+	  ]
+	}`
+
+	payload, err := profilePayloadWithWSTunnelURL([]byte(raw), " wss://edge.example.com:443/cdn/ws ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := profile.ParseWGWS(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.WSTunnelURL != "wss://edge.example.com:443/cdn/ws" {
+		t.Fatalf("wstunnel URL = %s", config.WSTunnelURL)
+	}
+	if config.Server != "edge.example.com" || config.LocalUDPListen != "127.0.0.1:51820" {
+		t.Fatalf("unexpected imported profile: %#v", config.Summary())
+	}
+}
+
 func TestNewUUIDShape(t *testing.T) {
 	value, err := newUUID()
 	if err != nil {
@@ -302,6 +336,8 @@ func TestUIIncludesIsolatedCleanupControl(t *testing.T) {
 		`isolated monitor pid`,
 		`app version`,
 		`privilege helper`,
+		`id="wstunnel-url"`,
+		`WSTunnel target URL`,
 	} {
 		if !strings.Contains(indexHTML, want) {
 			t.Fatalf("missing %q in UI", want)
@@ -339,7 +375,9 @@ func TestUIPrimaryConnectButtonIsSystemToggle(t *testing.T) {
 func TestUIAutoSavesProfileAndShowsActionOutput(t *testing.T) {
 	for _, want := range []string{
 		`var profileFileEl = document.getElementById('profile-file');`,
+		`var wstunnelUrlEl = document.getElementById('wstunnel-url');`,
 		`function uploadProfile()`,
+		`form.append('wstunnel_url', wstunnelUrlEl.value);`,
 		`profileFileEl.addEventListener('change', uploadProfile);`,
 		`setOutput('select a profile file first');`,
 		`if (message) setOutput(message);`,

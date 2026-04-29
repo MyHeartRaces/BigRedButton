@@ -261,6 +261,10 @@ const indexHTML = `<!doctype html>
             VPN profile JSON
             <input id="profile-file" name="profile" type="file" accept=".json,application/json">
           </label>
+          <label>
+            WSTunnel target URL
+            <input id="wstunnel-url" autocomplete="off" placeholder="wss://example.com:443/path">
+          </label>
           <button type="submit">Save Profile</button>
         </form>
         <div id="profile-summary" style="margin-top: 14px;"></div>
@@ -326,6 +330,7 @@ const indexHTML = `<!doctype html>
       var runtimeEl = document.getElementById('runtime');
       var outputEl = document.getElementById('output');
       var profileFileEl = document.getElementById('profile-file');
+      var wstunnelUrlEl = document.getElementById('wstunnel-url');
       var endpointEl = document.getElementById('endpoint-ip');
       var wstunnelEl = document.getElementById('wstunnel-binary');
       var isolatedSessionEl = document.getElementById('isolated-session');
@@ -615,6 +620,7 @@ const indexHTML = `<!doctype html>
         runTask('Saving profile', function () {
           var form = new FormData();
           form.append('profile', file);
+          form.append('wstunnel_url', wstunnelUrlEl.value);
           return requestJSON('POST', '/api/profile', form).then(function (result) {
             if (!result.ok) throw new Error(failedResponseMessage(result, 'profile upload failed'));
             var data = result.data || {};

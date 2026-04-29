@@ -228,6 +228,60 @@ func TestServeUnix(t *testing.T) {
 	}
 }
 
+func TestServeUnixWithPublicSocketAllowsDirectoryTraversal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix socket daemon transport is not available on Windows")
+	}
+	baseDir := shortUnixSocketTempDir(t)
+	socketDir := filepath.Join(baseDir, "run", "brb")
+	socketPath := filepath.Join(socketDir, "launcher.sock")
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- ServeUnixWithMode(ctx, socketPath, NewHandler(Options{RuntimeRoot: t.TempDir()}), 0o666)
+	}()
+	waitForUnixSocket(t, socketPath)
+
+	info, err := os.Stat(socketDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got&0o111 != 0o111 {
+		t.Fatalf("socket directory is not traversable: %o", got)
+	}
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("daemon did not stop")
+	}
+}
+
+func shortUnixSocketTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "brb-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(dir)
+	})
+	return dir
+}
+
+func TestSocketDirectoryModeKeepsPrivateDirectoryForPrivateSocket(t *testing.T) {
+	if got := socketDirectoryMode(0o600); got != 0o700 {
+		t.Fatalf("private socket dir mode = %o", got)
+	}
+	if got := socketDirectoryMode(0o660); got != 0o755 {
+		t.Fatalf("shared socket dir mode = %o", got)
+	}
+}
+
 func TestClientStatus(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix socket daemon transport is not available on Windows")
