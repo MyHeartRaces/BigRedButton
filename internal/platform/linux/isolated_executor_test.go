@@ -100,8 +100,8 @@ func TestIsolatedExecutorRunsSessionAndStop(t *testing.T) {
 		"ip netns add brb-123e4567",
 		"ip link add brbh123e4567 type veth peer name brbn123e4567",
 		"ip netns exec brb-123e4567 ip link add dev brbwg123e4567 type wireguard",
-		"ip netns exec brb-123e4567 wg setconf brbwg123e4567 " + sessionRoot + "/wg-setconf.conf",
-		"ip netns exec brb-123e4567 nft -f " + sessionRoot + "/namespace-killswitch.nft",
+		"ip netns exec brb-123e4567 wg setconf brbwg123e4567 " + filepath.Join(sessionRoot, "wg-setconf.conf"),
+		"ip netns exec brb-123e4567 nft -f " + filepath.Join(sessionRoot, "namespace-killswitch.nft"),
 	} {
 		if !strings.Contains(commands, want) {
 			t.Fatalf("missing command %q in:\n%s", want, commands)

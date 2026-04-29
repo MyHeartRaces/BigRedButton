@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+	"path"
 	"strconv"
 	"strings"
 
@@ -263,8 +263,8 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 		e.record(OperationApply, step.ID, command)
 	case step.ID == "configure-namespace-dns":
 		namespace := requiredDetailValue(step, "namespace")
-		e.record(OperationApply, step.ID, Command{Name: "mkdir", Args: []string{"-p", filepath.Join("/etc/netns", namespace)}})
-		e.recordRuntime(OperationApply, step.ID, "write "+filepath.Join("/etc/netns", namespace, "resolv.conf")+" "+strings.Join(detailValues(step, "dns"), ","))
+		e.record(OperationApply, step.ID, Command{Name: "mkdir", Args: []string{"-p", path.Join("/etc/netns", namespace)}})
+		e.recordRuntime(OperationApply, step.ID, "write "+path.Join("/etc/netns", namespace, "resolv.conf")+" "+strings.Join(detailValues(step, "dns"), ","))
 	case step.ID == "start-wstunnel-control":
 		command, err := wstunnelControlCommandFromStep(step)
 		if err != nil {
@@ -316,7 +316,7 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 	case step.ID == "apply-wireguard-peer-in-netns":
 		namespace := requiredDetailValue(step, "namespace")
 		iface := requiredDetailValue(step, "interface")
-		configPath := filepath.Join(requiredDetailValue(step, "session_runtime_root"), "wg-setconf.conf")
+		configPath := path.Join(requiredDetailValue(step, "session_runtime_root"), "wg-setconf.conf")
 		e.recordRuntime(OperationApply, step.ID, "write redacted WireGuard setconf "+configPath)
 		command, err := WireGuardSetConfigCommand(iface, configPath)
 		if err != nil {
@@ -343,7 +343,7 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 		}
 	case step.ID == "apply-namespace-kill-switch":
 		namespace := requiredDetailValue(step, "namespace")
-		rulesetPath := filepath.Join(requiredDetailValue(step, "session_runtime_root"), "namespace-killswitch.nft")
+		rulesetPath := path.Join(requiredDetailValue(step, "session_runtime_root"), "namespace-killswitch.nft")
 		e.recordRuntime(OperationApply, step.ID, "write namespace fail-closed nft ruleset "+rulesetPath)
 		command, err := NftApplyRulesetCommand(rulesetPath)
 		if err != nil {
@@ -363,8 +363,8 @@ func (e *DryRunExecutor) Apply(ctx context.Context, step planner.Step) error {
 	case step.ID == "monitor-process-tree":
 		e.recordRuntime(OperationApply, step.ID, "monitor process tree for session "+requiredDetailValue(step, "session_id"))
 	case step.ID == "store-isolated-runtime-state":
-		path := filepath.Join(requiredDetailValue(step, "session_runtime_root"), "state.json")
-		e.recordRuntime(OperationApply, step.ID, "would save "+path)
+		statePath := path.Join(requiredDetailValue(step, "session_runtime_root"), "state.json")
+		e.recordRuntime(OperationApply, step.ID, "would save "+statePath)
 	}
 	return nil
 }
@@ -548,7 +548,7 @@ func (e *DryRunExecutor) rollbackIsolatedStep(step planner.Step) error {
 		e.record(OperationRollback, step.ID, command)
 	case "configure-namespace-dns":
 		namespace := requiredDetailValue(step, "namespace")
-		e.recordRuntime(OperationRollback, step.ID, "remove "+filepath.Join("/etc/netns", namespace, "resolv.conf"))
+		e.recordRuntime(OperationRollback, step.ID, "remove "+path.Join("/etc/netns", namespace, "resolv.conf"))
 	case "start-wstunnel-control":
 		e.recordRuntime(OperationRollback, step.ID, "stop WSTunnel control process")
 	case "create-wireguard-interface-in-netns", "apply-wireguard-addresses-in-netns", "apply-wireguard-peer-in-netns":

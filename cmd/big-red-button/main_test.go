@@ -346,7 +346,7 @@ func TestIsolatedStatusCommandConnected(t *testing.T) {
 		Namespace:          "brb-123e4567",
 		HostVeth:           "brbh123e4567",
 		NamespaceVeth:      "brbn123e4567",
-	}.WithAppProcess(pid, []string{"ip", "netns", "exec"}).WithWSTunnelProcess(pid, []string{"wstunnel", "client"}))
+	}.WithAppProcess(pid, nil).WithWSTunnelProcess(pid, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +385,7 @@ func TestIsolatedSessionsCommand(t *testing.T) {
 		Namespace:          "brb-123e4567",
 		HostVeth:           "brbh123e4567",
 		NamespaceVeth:      "brbn123e4567",
-	}.WithAppProcess(pid, []string{"ip", "netns", "exec"}))
+	}.WithAppProcess(pid, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +412,7 @@ func TestIsolatedSessionsCommand(t *testing.T) {
 		fmt.Sprintf("app pid: %d", pid),
 		"session: " + dirtySessionID,
 		"state: Dirty",
-		"cleanup: big-red-button linux-cleanup-isolated-app -yes -session-id " + dirtySessionID + " -runtime-root " + runtimeRoot,
+		"cleanup: big-red-button linux-cleanup-isolated-app -yes -session-id " + dirtySessionID + isolatedRuntimeRootArg(runtimeRoot),
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output: %s", want, out)
