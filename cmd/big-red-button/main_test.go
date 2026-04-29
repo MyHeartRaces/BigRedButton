@@ -436,6 +436,9 @@ func TestEffectiveWSTunnelBinaryPrefersExplicitPath(t *testing.T) {
 }
 
 func TestEffectiveWSTunnelBinaryUsesBundledLinuxHelper(t *testing.T) {
+	if stdruntime.GOOS == "windows" {
+		t.Skip("Windows file mode does not preserve POSIX executable bits")
+	}
 	oldGOOS := currentGOOS
 	oldBundledPath := bundledLinuxWSTunnelPath
 	defer func() {
