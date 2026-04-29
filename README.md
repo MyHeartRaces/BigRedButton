@@ -95,9 +95,10 @@ runtime status, and on Linux run guarded connect/disconnect commands through
 the CLI.
 
 When importing a sing-box WireGuard attachment that points to a local WSTunnel
-UDP listener, paste the external `wss://host:443/path` WSTunnel target into the
-GUI profile form before saving. Native Big Red Button profiles already contain
-that URL.
+UDP listener, paste the exact external WSTunnel target from the export message
+into the GUI profile form before saving. It must be a real value like
+`wss://your-gateway-domain:443/your-path`, not the placeholder word `host`.
+Native Big Red Button profiles already contain that URL.
 
 On Linux the GUI uses `pkexec` for privileged actions, so desktop environments
 can show a graphical privilege prompt. The Linux package installs a polkit

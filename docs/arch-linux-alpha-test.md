@@ -97,7 +97,9 @@ In the GUI:
 
 1. Save Profile.
 2. If the selected JSON is a sing-box WireGuard attachment, paste the
-   `wss://host:443/path` WSTunnel target into `WSTunnel target URL`.
+   exact external WSTunnel target from the export message into
+   `WSTunnel target URL`. It must be a real `wss://...:443/...` URL, not the
+   placeholder word `host`.
 3. Leave `Tunnel helper binary` as `/usr/lib/big-red-button/wstunnel` unless
    you want to test another helper build.
 4. Run `Preflight`.

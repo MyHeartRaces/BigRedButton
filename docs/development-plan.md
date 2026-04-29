@@ -59,7 +59,7 @@ Create a launcher-owned VPN profile schema based on server export
 Minimum required fields:
 
 - profile name: `WGWS-Direct`
-- WSTunnel URL: `wss://host:443/path`
+- WSTunnel URL: a real `wss://...:443/...` target from the export payload
 - WSTunnel local UDP endpoint
 - WireGuard private key
 - WireGuard public server key
@@ -247,4 +247,3 @@ Expected platform-specific parts:
 - mobile app
 - custom WireGuard implementation
 - custom WSTunnel implementation
-

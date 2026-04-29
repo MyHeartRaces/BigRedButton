@@ -133,7 +133,7 @@ The launcher consumes a normalized VPN profile derived from server
 Minimum profile fields:
 
 - profile name: `WGWS-Direct`
-- WSTunnel URL: `wss://host:443/path`
+- WSTunnel URL: a real `wss://...:443/...` target from the export payload
 - WSTunnel local UDP listen endpoint
 - WireGuard client private key
 - WireGuard server public key

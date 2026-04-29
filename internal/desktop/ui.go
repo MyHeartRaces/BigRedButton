@@ -263,7 +263,7 @@ const indexHTML = `<!doctype html>
           </label>
           <label>
             WSTunnel target URL
-            <input id="wstunnel-url" autocomplete="off" placeholder="wss://example.com:443/path">
+            <input id="wstunnel-url" autocomplete="off" placeholder="paste actual wss://gateway:443/path">
           </label>
           <button type="submit">Save Profile</button>
         </form>

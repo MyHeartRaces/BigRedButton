@@ -261,6 +261,24 @@ func TestParseWGWSRejectsUnsafeWSTunnelURL(t *testing.T) {
 	}
 }
 
+func TestParseWGWSRejectsPlaceholderWSTunnelHost(t *testing.T) {
+	raw := validProfileJSON()
+	raw = strings.Replace(raw, "wss://edge.example.com:443/cdn/ws", "wss://host:443/cdn/ws", 1)
+
+	_, err := ParseWGWS([]byte(raw))
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	validationErr, ok := AsValidationError(err)
+	if !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+	joined := strings.Join(validationErr.Problems, "\n")
+	if !strings.Contains(joined, "wstunnel.url host must be the real WSTunnel target hostname") {
+		t.Fatalf("missing placeholder host error: %s", joined)
+	}
+}
+
 func TestParseWGWSRejectsNonLoopbackLocalUDP(t *testing.T) {
 	raw := validProfileJSON()
 	raw = strings.Replace(raw, `"local_udp_listen": "127.0.0.1:51820"`, `"local_udp_listen": "0.0.0.0:51820"`, 1)

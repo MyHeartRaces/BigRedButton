@@ -697,6 +697,8 @@ func normalizeWSTunnelURL(raw string, problems *[]string) (string, string, strin
 	host := parsed.Hostname()
 	if host == "" {
 		*problems = append(*problems, "wstunnel.url host is required")
+	} else if isPlaceholderHost(host) {
+		*problems = append(*problems, "wstunnel.url host must be the real WSTunnel target hostname, not a placeholder")
 	}
 	if parsed.Port() != "443" {
 		*problems = append(*problems, "wstunnel.url must explicitly use port 443")
@@ -819,6 +821,19 @@ func validAddressOrPrefix(value string) bool {
 func isPlaceholder(value string) bool {
 	upper := strings.ToUpper(strings.TrimSpace(value))
 	return strings.HasPrefix(upper, "REPLACE_") || strings.Contains(upper, "PLACEHOLDER")
+}
+
+func isPlaceholderHost(value string) bool {
+	normalized := strings.ToLower(strings.Trim(strings.TrimSpace(value), "."))
+	return normalized == "host" ||
+		normalized == "hostname" ||
+		normalized == "wstunnel-host" ||
+		normalized == "wstunnel.example" ||
+		normalized == "example.com" ||
+		normalized == "example.net" ||
+		normalized == "example.org" ||
+		strings.HasPrefix(normalized, "replace-") ||
+		strings.Contains(normalized, "placeholder")
 }
 
 func hasWhitespace(value string) bool {
