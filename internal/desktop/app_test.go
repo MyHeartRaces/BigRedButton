@@ -336,6 +336,20 @@ func TestUIPrimaryConnectButtonIsSystemToggle(t *testing.T) {
 	}
 }
 
+func TestUIAutoSavesProfileAndShowsActionOutput(t *testing.T) {
+	for _, want := range []string{
+		`const profileFileEl = document.getElementById('profile-file');`,
+		`async function uploadProfile()`,
+		`profileFileEl.addEventListener('change', uploadProfile);`,
+		`outputEl.textContent = message;`,
+		`if (message) outputEl.textContent = message;`,
+	} {
+		if !strings.Contains(indexHTML, want) {
+			t.Fatalf("missing %q in UI", want)
+		}
+	}
+}
+
 func TestDesktopLaunchEnvUsesAllowlist(t *testing.T) {
 	t.Setenv("DISPLAY", ":1")
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")

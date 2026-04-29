@@ -162,6 +162,9 @@ The package installs:
 
 The PKGBUILD is in `packaging/arch/PKGBUILD`.
 
+The first Arch Linux alpha test checklist is in
+[`docs/arch-linux-alpha-test.md`](docs/arch-linux-alpha-test.md).
+
 ## Experimental Daemon IPC
 
 `big-red-buttond` is an early local IPC daemon. It listens on a Unix domain

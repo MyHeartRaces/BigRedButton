@@ -322,6 +322,7 @@ const indexHTML = `<!doctype html>
     const profileSummaryEl = document.getElementById('profile-summary');
     const runtimeEl = document.getElementById('runtime');
     const outputEl = document.getElementById('output');
+    const profileFileEl = document.getElementById('profile-file');
     const endpointEl = document.getElementById('endpoint-ip');
     const wstunnelEl = document.getElementById('wstunnel-binary');
     const isolatedSessionEl = document.getElementById('isolated-session');
@@ -391,7 +392,7 @@ const indexHTML = `<!doctype html>
       isolatedSessionEl.value = data.gui.isolated_session || isolatedSessionEl.value || '';
       if (!isolatedSessionEl.value && sessions.length === 1) isolatedSessionEl.value = sessions[0].session_id || '';
       isolatedCommandEl.value = data.gui.isolated_command || isolatedCommandEl.value || '';
-      outputEl.textContent = data.gui.last_output || '';
+      outputEl.textContent = data.gui.last_output || outputEl.textContent || '';
 
       if (data.profile) {
         profileSummaryEl.innerHTML = definitionList([
@@ -432,23 +433,31 @@ const indexHTML = `<!doctype html>
       ]);
     }
 
-    document.getElementById('profile-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const file = document.getElementById('profile-file').files[0];
-      if (!file) return;
+    async function uploadProfile() {
+      const file = profileFileEl.files[0];
+      if (!file) {
+        outputEl.textContent = 'select a profile file first';
+        return;
+      }
       const form = new FormData();
       form.append('profile', file);
       setBusy(true);
       try {
         const response = await fetch('/api/profile', { method: 'POST', body: form });
         const data = await response.json();
-        const message = !response.ok ? data.error || 'profile upload failed' : '';
+        const message = response.ok ? ((data.gui && data.gui.last_output) || 'profile saved') : (data.error || 'profile upload failed');
         await refresh();
-        if (message) outputEl.textContent = message;
+        outputEl.textContent = message;
       } finally {
         setBusy(false);
       }
+    }
+
+    document.getElementById('profile-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await uploadProfile();
     });
+    profileFileEl.addEventListener('change', uploadProfile);
 
     async function action(path) {
       setBusy(true);
@@ -466,7 +475,7 @@ const indexHTML = `<!doctype html>
         const data = await response.json();
         const message = data.output || data.error || '';
         await refresh();
-        if (!response.ok || data.error) outputEl.textContent = message;
+        if (message) outputEl.textContent = message;
       } finally {
         setBusy(false);
       }
