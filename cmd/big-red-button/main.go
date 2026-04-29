@@ -2421,11 +2421,15 @@ func waitForIsolatedAppExit(ctx context.Context, store truntime.Store, pollInter
 		ctx, cancel = context.WithTimeout(ctx, waitTimeout)
 		defer cancel()
 	}
+	lastAppPID := 0
 	for {
 		state, err := store.Load(ctx)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				return linuxIsolatedMonitorState{Reason: "runtime state missing"}, nil
+			}
+			if lastAppPID != 0 && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+				return linuxIsolatedMonitorState{AppPID: lastAppPID}, err
 			}
 			return linuxIsolatedMonitorState{}, err
 		}
@@ -2435,6 +2439,7 @@ func waitForIsolatedAppExit(ctx context.Context, store truntime.Store, pollInter
 		if state.AppProcess == nil {
 			return linuxIsolatedMonitorState{Reason: "app process missing from runtime state"}, nil
 		}
+		lastAppPID = state.AppProcess.PID
 		if !monitorPIDExists(state.AppProcess.PID) {
 			return linuxIsolatedMonitorState{
 				AppPID: state.AppProcess.PID,
