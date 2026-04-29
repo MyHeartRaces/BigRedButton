@@ -1196,7 +1196,7 @@ func TestWaitForIsolatedAppExitHonorsTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := waitForIsolatedAppExit(context.Background(), store, time.Millisecond, time.Millisecond)
+	got, err := waitForIsolatedAppExit(context.Background(), store, 10*time.Millisecond, 250*time.Millisecond)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected deadline exceeded, got state=%#v err=%v", got, err)
 	}
