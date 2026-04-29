@@ -325,10 +325,10 @@ func forceDesktopRuntime(goos string, euid int, lookPath func(string) (string, e
 
 func TestUIPrimaryConnectButtonIsSystemToggle(t *testing.T) {
 	for _, want := range []string{
-		`let currentSystemState = 'Idle';`,
+		`var currentSystemState = 'Idle';`,
 		`connectButton.textContent = currentSystemState === 'Connected' || currentSystemState === 'Dirty' ? 'Disconnect' : 'Connect';`,
 		`function systemTogglePath()`,
-		`action(systemTogglePath())`,
+		`runAction(connectButton.textContent || 'Connect', systemTogglePath())`,
 	} {
 		if !strings.Contains(indexHTML, want) {
 			t.Fatalf("missing %q in UI", want)
@@ -338,14 +338,39 @@ func TestUIPrimaryConnectButtonIsSystemToggle(t *testing.T) {
 
 func TestUIAutoSavesProfileAndShowsActionOutput(t *testing.T) {
 	for _, want := range []string{
-		`const profileFileEl = document.getElementById('profile-file');`,
-		`async function uploadProfile()`,
+		`var profileFileEl = document.getElementById('profile-file');`,
+		`function uploadProfile()`,
 		`profileFileEl.addEventListener('change', uploadProfile);`,
-		`outputEl.textContent = message;`,
-		`if (message) outputEl.textContent = message;`,
+		`setOutput('select a profile file first');`,
+		`if (message) setOutput(message);`,
 	} {
 		if !strings.Contains(indexHTML, want) {
 			t.Fatalf("missing %q in UI", want)
+		}
+	}
+}
+
+func TestUIUsesXHRAndSurfacesBrowserErrors(t *testing.T) {
+	for _, want := range []string{
+		`new XMLHttpRequest()`,
+		`window.addEventListener('error'`,
+		`window.addEventListener('unhandledrejection'`,
+		`GUI JavaScript error: `,
+		`failedResponseMessage(result`,
+		`setOutput(label + ' failed: ' + describeError(error));`,
+	} {
+		if !strings.Contains(indexHTML, want) {
+			t.Fatalf("missing %q in UI", want)
+		}
+	}
+	for _, unwanted := range []string{
+		`fetch(`,
+		`async function`,
+		`=>`,
+		` ?? `,
+	} {
+		if strings.Contains(indexHTML, unwanted) {
+			t.Fatalf("UI still contains brittle browser syntax %q", unwanted)
 		}
 	}
 }

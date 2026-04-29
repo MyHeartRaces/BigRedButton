@@ -318,185 +318,351 @@ const indexHTML = `<!doctype html>
   </main>
 
   <script>
-    const stateEl = document.getElementById('state');
-    const profileSummaryEl = document.getElementById('profile-summary');
-    const runtimeEl = document.getElementById('runtime');
-    const outputEl = document.getElementById('output');
-    const profileFileEl = document.getElementById('profile-file');
-    const endpointEl = document.getElementById('endpoint-ip');
-    const wstunnelEl = document.getElementById('wstunnel-binary');
-    const isolatedSessionEl = document.getElementById('isolated-session');
-    const isolatedCommandEl = document.getElementById('isolated-command');
-    const connectButton = document.getElementById('connect');
-    const disconnectButton = document.getElementById('disconnect');
-    const preflightButton = document.getElementById('preflight');
-    const diagnosticsButton = document.getElementById('diagnostics');
-    const diagnosticsBundleButton = document.getElementById('diagnostics-bundle');
-    const isolatedPreflightButton = document.getElementById('isolated-preflight');
-    const isolatedStartButton = document.getElementById('isolated-start');
-    const isolatedStopButton = document.getElementById('isolated-stop');
-    const isolatedCleanupButton = document.getElementById('isolated-cleanup');
-    const isolatedRecoverButton = document.getElementById('isolated-recover');
-    let currentSystemState = 'Idle';
+    (function () {
+      'use strict';
 
-    function escapeHTML(value) {
-      return String(value ?? '').replace(/[&<>"']/g, char => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-      }[char]));
-    }
+      var stateEl = document.getElementById('state');
+      var profileSummaryEl = document.getElementById('profile-summary');
+      var runtimeEl = document.getElementById('runtime');
+      var outputEl = document.getElementById('output');
+      var profileFileEl = document.getElementById('profile-file');
+      var endpointEl = document.getElementById('endpoint-ip');
+      var wstunnelEl = document.getElementById('wstunnel-binary');
+      var isolatedSessionEl = document.getElementById('isolated-session');
+      var isolatedCommandEl = document.getElementById('isolated-command');
+      var connectButton = document.getElementById('connect');
+      var disconnectButton = document.getElementById('disconnect');
+      var preflightButton = document.getElementById('preflight');
+      var diagnosticsButton = document.getElementById('diagnostics');
+      var diagnosticsBundleButton = document.getElementById('diagnostics-bundle');
+      var refreshButton = document.getElementById('refresh');
+      var isolatedPreflightButton = document.getElementById('isolated-preflight');
+      var isolatedStartButton = document.getElementById('isolated-start');
+      var isolatedStopButton = document.getElementById('isolated-stop');
+      var isolatedCleanupButton = document.getElementById('isolated-cleanup');
+      var isolatedRecoverButton = document.getElementById('isolated-recover');
+      var actionButtons = [
+        connectButton,
+        disconnectButton,
+        preflightButton,
+        diagnosticsButton,
+        diagnosticsBundleButton,
+        refreshButton,
+        isolatedPreflightButton,
+        isolatedStartButton,
+        isolatedStopButton,
+        isolatedCleanupButton,
+        isolatedRecoverButton
+      ];
+      var currentSystemState = 'Idle';
+      var lastRenderedOutput = '';
 
-    function definitionList(items) {
-      return '<dl>' + items.map(([key, value]) =>
-        '<dt>' + escapeHTML(key) + '</dt><dd>' + escapeHTML(value) + '</dd>'
-      ).join('') + '</dl>';
-    }
-
-    function setBusy(busy) {
-      connectButton.disabled = busy;
-      disconnectButton.disabled = busy;
-      preflightButton.disabled = busy;
-      diagnosticsButton.disabled = busy;
-      diagnosticsBundleButton.disabled = busy;
-      isolatedPreflightButton.disabled = busy;
-      isolatedStartButton.disabled = busy;
-      isolatedStopButton.disabled = busy;
-      isolatedCleanupButton.disabled = busy;
-      isolatedRecoverButton.disabled = busy;
-    }
-
-    async function refresh() {
-      const response = await fetch('/api/status');
-      const data = await response.json();
-      const sessions = data.isolated_sessions || [];
-      currentSystemState = data.runtime && data.runtime.state ? data.runtime.state : 'Idle';
-      const isolated = data.isolated && data.isolated.active ? data.isolated.active : null;
-      const hasConnectedIsolatedSession = Boolean(isolated || sessions.find(session => {
-        const snapshot = session.snapshot || {};
-        return snapshot.state === 'Connected';
-      }));
-      const hasDirtyIsolatedSession = Boolean((data.isolated && data.isolated.state === 'Dirty') || sessions.find(session => {
-        const snapshot = session.snapshot || {};
-        return snapshot.state === 'Dirty';
-      }));
-      const effectiveState = hasConnectedIsolatedSession ? 'Isolated Connected' : (hasDirtyIsolatedSession ? 'Isolated Dirty' : data.runtime.state);
-      stateEl.textContent = effectiveState + ' on ' + data.os;
-      stateEl.className = 'status-pill ' + (effectiveState.includes('Connected') ? 'ok' : (effectiveState.includes('Dirty') ? 'warn' : ''));
-      connectButton.textContent = currentSystemState === 'Connected' || currentSystemState === 'Dirty' ? 'Disconnect' : 'Connect';
-
-      endpointEl.value = data.gui.endpoint_ip || endpointEl.value || '';
-      wstunnelEl.value = data.gui.wstunnel_binary || wstunnelEl.value || '';
-      isolatedSessionEl.value = data.gui.isolated_session || isolatedSessionEl.value || '';
-      if (!isolatedSessionEl.value && sessions.length === 1) isolatedSessionEl.value = sessions[0].session_id || '';
-      isolatedCommandEl.value = data.gui.isolated_command || isolatedCommandEl.value || '';
-      outputEl.textContent = data.gui.last_output || outputEl.textContent || '';
-
-      if (data.profile) {
-        profileSummaryEl.innerHTML = definitionList([
-          ['server', data.profile.server + ':' + data.profile.port],
-          ['gateway', data.profile.wstunnel_url],
-          ['addresses', (data.profile.addresses || []).join(', ')],
-          ['allowed IPs', (data.profile.allowed_ips || []).join(', ')],
-          ['fingerprint', data.profile.fingerprint]
-        ]);
-      } else {
-        profileSummaryEl.innerHTML = '<span class="warn">' + escapeHTML(data.error || 'no profile saved') + '</span>';
+      function text(value) {
+        return String(value == null ? '' : value);
       }
 
-      runtimeEl.innerHTML = definitionList([
-        ['app version', data.version && data.version.version ? data.version.version : ''],
-        ['cli path', data.cli_path || ''],
-        ['privilege helper', data.privilege_helper || ''],
-        ['state', data.runtime.state],
-        ['runtime root', data.runtime.runtime_root],
-        ['profile fingerprint', data.runtime.active ? data.runtime.active.profile_fingerprint : ''],
-        ['interface', data.runtime.active ? data.runtime.active.wireguard_interface : ''],
-        ['dns interface', data.runtime.active && data.runtime.active.dns_applied ? data.runtime.active.dns_interface : ''],
-        ['dns servers', data.runtime.active && data.runtime.active.dns_applied ? (data.runtime.active.dns_servers || []).join(', ') : ''],
-        ['isolated state', data.isolated ? data.isolated.state : ''],
-        ['isolated root', data.isolated ? data.isolated.runtime_root : ''],
-        ['isolated session', isolated ? isolated.session_id : ''],
-        ['isolated namespace', isolated ? isolated.namespace : ''],
-        ['isolated app pid', isolated && isolated.app_process ? isolated.app_process.pid : ''],
-        ['isolated gateway pid', isolated && isolated.wstunnel_process ? isolated.wstunnel_process.pid : ''],
-        ['isolated monitor pid', isolated && isolated.monitor_process ? isolated.monitor_process.pid : ''],
-        ['isolated error', data.isolated ? data.isolated.error || '' : ''],
-        ['known isolated sessions', sessions.length ? sessions.map(session => {
-          const snapshot = session.snapshot || {};
-          const active = snapshot.active || {};
-          return session.session_id + ' ' + snapshot.state + (active.namespace ? ' ' + active.namespace : '');
-        }).join(', ') : ''],
-        ['error', data.runtime.error || '']
-      ]);
-    }
-
-    async function uploadProfile() {
-      const file = profileFileEl.files[0];
-      if (!file) {
-        outputEl.textContent = 'select a profile file first';
-        return;
-      }
-      const form = new FormData();
-      form.append('profile', file);
-      setBusy(true);
-      try {
-        const response = await fetch('/api/profile', { method: 'POST', body: form });
-        const data = await response.json();
-        const message = response.ok ? ((data.gui && data.gui.last_output) || 'profile saved') : (data.error || 'profile upload failed');
-        await refresh();
-        outputEl.textContent = message;
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    document.getElementById('profile-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      await uploadProfile();
-    });
-    profileFileEl.addEventListener('change', uploadProfile);
-
-    async function action(path) {
-      setBusy(true);
-      try {
-        const response = await fetch(path, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint_ip: endpointEl.value,
-            wstunnel_binary: wstunnelEl.value,
-            session_id: isolatedSessionEl.value,
-            app_command: isolatedCommandEl.value
-          })
+      function escapeHTML(value) {
+        return text(value).replace(/[&<>"']/g, function (char) {
+          var map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+          };
+          return map[char];
         });
-        const data = await response.json();
-        const message = data.output || data.error || '';
-        await refresh();
-        if (message) outputEl.textContent = message;
-      } finally {
-        setBusy(false);
       }
-    }
 
-    function systemTogglePath() {
-      return currentSystemState === 'Connected' || currentSystemState === 'Dirty' ? '/api/disconnect' : '/api/connect';
-    }
+      function join(values) {
+        return values && values.length ? values.join(', ') : '';
+      }
 
-    connectButton.addEventListener('click', () => action(systemTogglePath()));
-    disconnectButton.addEventListener('click', () => action('/api/disconnect'));
-    preflightButton.addEventListener('click', () => action('/api/preflight'));
-    diagnosticsButton.addEventListener('click', () => action('/api/diagnostics'));
-    diagnosticsBundleButton.addEventListener('click', () => action('/api/diagnostics-bundle'));
-    isolatedPreflightButton.addEventListener('click', () => action('/api/isolated/preflight'));
-    isolatedStartButton.addEventListener('click', () => action('/api/isolated/start'));
-    isolatedStopButton.addEventListener('click', () => action('/api/isolated/stop'));
-    isolatedCleanupButton.addEventListener('click', () => action('/api/isolated/cleanup'));
-    isolatedRecoverButton.addEventListener('click', () => action('/api/isolated/recover'));
-    document.getElementById('refresh').addEventListener('click', refresh);
-    refresh().catch(error => { outputEl.textContent = error.message; });
+      function definitionList(items) {
+        var html = '<dl>';
+        for (var index = 0; index < items.length; index += 1) {
+          html += '<dt>' + escapeHTML(items[index][0]) + '</dt><dd>' + escapeHTML(items[index][1]) + '</dd>';
+        }
+        return html + '</dl>';
+      }
+
+      function setOutput(message) {
+        lastRenderedOutput = text(message);
+        outputEl.textContent = lastRenderedOutput;
+      }
+
+      function describeError(error) {
+        if (!error) return 'unknown error';
+        if (error.message) return error.message;
+        return text(error);
+      }
+
+      function setBusy(busy, message) {
+        for (var index = 0; index < actionButtons.length; index += 1) {
+          if (actionButtons[index]) actionButtons[index].disabled = busy;
+        }
+        if (busy && message) {
+          stateEl.textContent = message;
+          setOutput(message);
+        }
+      }
+
+      function requestJSON(method, path, body, headers) {
+        return new Promise(function (resolve, reject) {
+          if (!window.XMLHttpRequest) {
+            reject(new Error('this browser does not support XMLHttpRequest'));
+            return;
+          }
+          var xhr = new XMLHttpRequest();
+          xhr.open(method, path, true);
+          xhr.timeout = 180000;
+          xhr.setRequestHeader('Accept', 'application/json');
+          if (headers) {
+            for (var key in headers) {
+              if (Object.prototype.hasOwnProperty.call(headers, key)) {
+                xhr.setRequestHeader(key, headers[key]);
+              }
+            }
+          }
+          xhr.onreadystatechange = function () {
+            if (xhr.readyState !== 4) return;
+            var raw = xhr.responseText || '';
+            var data = {};
+            if (raw) {
+              try {
+                data = JSON.parse(raw);
+              } catch (parseError) {
+                reject(new Error('HTTP ' + xhr.status + ' ' + xhr.statusText + '\n' + raw));
+                return;
+              }
+            }
+            resolve({
+              ok: xhr.status >= 200 && xhr.status < 300,
+              status: xhr.status,
+              statusText: xhr.statusText,
+              data: data || {}
+            });
+          };
+          xhr.onerror = function () {
+            reject(new Error('network error while calling ' + path));
+          };
+          xhr.ontimeout = function () {
+            reject(new Error('timeout while calling ' + path));
+          };
+          xhr.send(body || null);
+        });
+      }
+
+      function responseMessage(result, fallback) {
+        var data = result && result.data ? result.data : {};
+        return data.output || data.error || fallback || '';
+      }
+
+      function failedResponseMessage(result, fallback) {
+        var message = responseMessage(result, '');
+        if (message) return message;
+        if (result) return 'HTTP ' + result.status + ' ' + result.statusText;
+        return fallback || 'request failed';
+      }
+
+      function activeIsolatedSession(data, sessions) {
+        if (data.isolated && data.isolated.active) return data.isolated.active;
+        for (var index = 0; index < sessions.length; index += 1) {
+          var snapshot = sessions[index].snapshot || {};
+          if (snapshot.active && snapshot.state === 'Connected') return snapshot.active;
+        }
+        return null;
+      }
+
+      function hasSessionState(data, sessions, state) {
+        if (data.isolated && data.isolated.state === state) return true;
+        for (var index = 0; index < sessions.length; index += 1) {
+          var snapshot = sessions[index].snapshot || {};
+          if (snapshot.state === state) return true;
+        }
+        return false;
+      }
+
+      function knownSessionsText(sessions) {
+        var values = [];
+        for (var index = 0; index < sessions.length; index += 1) {
+          var snapshot = sessions[index].snapshot || {};
+          var active = snapshot.active || {};
+          values.push(text(sessions[index].session_id) + ' ' + text(snapshot.state) + (active.namespace ? ' ' + active.namespace : ''));
+        }
+        return values.join(', ');
+      }
+
+      function render(data) {
+        data = data || {};
+        var runtime = data.runtime || {};
+        var gui = data.gui || {};
+        var sessions = data.isolated_sessions || [];
+        var isolated = activeIsolatedSession(data, sessions);
+        var connected = isolated || hasSessionState(data, sessions, 'Connected');
+        var dirty = hasSessionState(data, sessions, 'Dirty');
+        currentSystemState = runtime.state || 'Idle';
+        var effectiveState = connected ? 'Isolated Connected' : (dirty ? 'Isolated Dirty' : currentSystemState);
+
+        stateEl.textContent = effectiveState + ' on ' + (data.os || 'unknown OS');
+        stateEl.className = 'status-pill ' + (effectiveState.indexOf('Connected') !== -1 ? 'ok' : (effectiveState.indexOf('Dirty') !== -1 ? 'warn' : ''));
+        connectButton.textContent = currentSystemState === 'Connected' || currentSystemState === 'Dirty' ? 'Disconnect' : 'Connect';
+
+        endpointEl.value = gui.endpoint_ip || endpointEl.value || '';
+        wstunnelEl.value = gui.wstunnel_binary || wstunnelEl.value || '';
+        isolatedSessionEl.value = gui.isolated_session || isolatedSessionEl.value || '';
+        if (!isolatedSessionEl.value && sessions.length === 1) isolatedSessionEl.value = sessions[0].session_id || '';
+        isolatedCommandEl.value = gui.isolated_command || isolatedCommandEl.value || '';
+        if (gui.last_output && (!lastRenderedOutput || lastRenderedOutput === 'Loading status...')) setOutput(gui.last_output);
+
+        if (data.profile) {
+          profileSummaryEl.innerHTML = definitionList([
+            ['server', text(data.profile.server) + ':' + text(data.profile.port)],
+            ['gateway', data.profile.wstunnel_url],
+            ['addresses', join(data.profile.addresses)],
+            ['allowed IPs', join(data.profile.allowed_ips)],
+            ['fingerprint', data.profile.fingerprint],
+            ['saved profile', gui.profile_path]
+          ]);
+        } else {
+          profileSummaryEl.innerHTML = '<span class="warn">' + escapeHTML(data.error || 'no profile saved') + '</span>';
+        }
+
+        runtimeEl.innerHTML = definitionList([
+          ['app version', data.version && data.version.version ? data.version.version : ''],
+          ['cli path', data.cli_path || ''],
+          ['privilege helper', data.privilege_helper || ''],
+          ['profile path', gui.profile_path || ''],
+          ['last command', gui.last_command || ''],
+          ['last command time', gui.last_command_time || ''],
+          ['state', runtime.state || ''],
+          ['runtime root', runtime.runtime_root || ''],
+          ['profile fingerprint', runtime.active ? runtime.active.profile_fingerprint : ''],
+          ['interface', runtime.active ? runtime.active.wireguard_interface : ''],
+          ['dns interface', runtime.active && runtime.active.dns_applied ? runtime.active.dns_interface : ''],
+          ['dns servers', runtime.active && runtime.active.dns_applied ? join(runtime.active.dns_servers) : ''],
+          ['isolated state', data.isolated ? data.isolated.state : ''],
+          ['isolated root', data.isolated ? data.isolated.runtime_root : ''],
+          ['isolated session', isolated ? isolated.session_id : ''],
+          ['isolated namespace', isolated ? isolated.namespace : ''],
+          ['isolated app pid', isolated && isolated.app_process ? isolated.app_process.pid : ''],
+          ['isolated gateway pid', isolated && isolated.wstunnel_process ? isolated.wstunnel_process.pid : ''],
+          ['isolated monitor pid', isolated && isolated.monitor_process ? isolated.monitor_process.pid : ''],
+          ['isolated error', data.isolated ? data.isolated.error || '' : ''],
+          ['known isolated sessions', knownSessionsText(sessions)],
+          ['error', runtime.error || data.error || '']
+        ]);
+      }
+
+      function refresh() {
+        return requestJSON('GET', '/api/status').then(function (result) {
+          if (!result.ok) throw new Error(failedResponseMessage(result, 'status request failed'));
+          render(result.data);
+          return result.data;
+        });
+      }
+
+      function actionPayload() {
+        return JSON.stringify({
+          endpoint_ip: endpointEl.value,
+          wstunnel_binary: wstunnelEl.value,
+          session_id: isolatedSessionEl.value,
+          app_command: isolatedCommandEl.value
+        });
+      }
+
+      function runTask(label, task) {
+        setBusy(true, label + '...');
+        task().then(function (message) {
+          return refresh().then(function () {
+            if (message) setOutput(message);
+          }, function (error) {
+            setOutput(label + ' completed, but status refresh failed: ' + describeError(error));
+          });
+        }, function (error) {
+          return refresh().then(function () {
+            setOutput(label + ' failed: ' + describeError(error));
+          }, function () {
+            setOutput(label + ' failed: ' + describeError(error));
+          });
+        }).then(function () {
+          setBusy(false);
+        }, function (error) {
+          setBusy(false);
+          setOutput(label + ' failed: ' + describeError(error));
+        });
+      }
+
+      function runAction(label, path) {
+        runTask(label, function () {
+          return requestJSON('POST', path, actionPayload(), { 'Content-Type': 'application/json' }).then(function (result) {
+            if (!result.ok) throw new Error(failedResponseMessage(result, label + ' failed'));
+            return responseMessage(result, label + ' completed');
+          });
+        });
+      }
+
+      function uploadProfile() {
+        if (!window.FormData) {
+          setOutput('this browser does not support profile upload');
+          return;
+        }
+        var file = profileFileEl.files && profileFileEl.files.length ? profileFileEl.files[0] : null;
+        if (!file) {
+          setOutput('select a profile file first');
+          return;
+        }
+        runTask('Saving profile', function () {
+          var form = new FormData();
+          form.append('profile', file);
+          return requestJSON('POST', '/api/profile', form).then(function (result) {
+            if (!result.ok) throw new Error(failedResponseMessage(result, 'profile upload failed'));
+            var data = result.data || {};
+            var gui = data.gui || {};
+            return gui.last_output || responseMessage(result, 'profile saved');
+          });
+        });
+      }
+
+      function systemTogglePath() {
+        return currentSystemState === 'Connected' || currentSystemState === 'Dirty' ? '/api/disconnect' : '/api/connect';
+      }
+
+      window.addEventListener('error', function (event) {
+        setOutput('GUI JavaScript error: ' + describeError(event.error || event.message));
+      });
+      window.addEventListener('unhandledrejection', function (event) {
+        setOutput('GUI request error: ' + describeError(event.reason));
+      });
+
+      document.getElementById('profile-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        uploadProfile();
+      });
+      profileFileEl.addEventListener('change', uploadProfile);
+      connectButton.addEventListener('click', function () { runAction(connectButton.textContent || 'Connect', systemTogglePath()); });
+      disconnectButton.addEventListener('click', function () { runAction('Disconnect', '/api/disconnect'); });
+      preflightButton.addEventListener('click', function () { runAction('Preflight', '/api/preflight'); });
+      diagnosticsButton.addEventListener('click', function () { runAction('Diagnostics', '/api/diagnostics'); });
+      diagnosticsBundleButton.addEventListener('click', function () { runAction('Diagnostics bundle', '/api/diagnostics-bundle'); });
+      isolatedPreflightButton.addEventListener('click', function () { runAction('Isolated preflight', '/api/isolated/preflight'); });
+      isolatedStartButton.addEventListener('click', function () { runAction('Start isolated app', '/api/isolated/start'); });
+      isolatedStopButton.addEventListener('click', function () { runAction('Stop isolated app', '/api/isolated/stop'); });
+      isolatedCleanupButton.addEventListener('click', function () { runAction('Cleanup isolated app', '/api/isolated/cleanup'); });
+      isolatedRecoverButton.addEventListener('click', function () { runAction('Recover isolated sessions', '/api/isolated/recover'); });
+      refreshButton.addEventListener('click', function () {
+        runTask('Refreshing status', function () {
+          return refresh().then(function () { return 'status refreshed'; });
+        });
+      });
+
+      setOutput('Loading status...');
+      refresh().then(function () {
+        if (lastRenderedOutput === 'Loading status...') setOutput('GUI ready.');
+      }, function (error) {
+        setOutput('Status refresh failed: ' + describeError(error));
+      });
+    }());
   </script>
 </body>
 </html>

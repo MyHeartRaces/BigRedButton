@@ -196,6 +196,7 @@ func (a *app) index(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	noStore(w)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = io.WriteString(w, indexHTML)
 }
@@ -1073,6 +1074,7 @@ func writeJSON(w http.ResponseWriter, value any) {
 }
 
 func writeJSONStatus(w http.ResponseWriter, statusCode int, value any) {
+	noStore(w)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(value)
@@ -1080,4 +1082,10 @@ func writeJSONStatus(w http.ResponseWriter, statusCode int, value any) {
 
 func methodNotAllowed(w http.ResponseWriter) {
 	writeJSONStatus(w, http.StatusMethodNotAllowed, actionResponse{Error: "method not allowed"})
+}
+
+func noStore(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 }
