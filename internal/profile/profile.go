@@ -22,6 +22,7 @@ const (
 	defaultLocalUDPListen = "127.0.0.1:51820"
 	defaultWGWSMTU        = 1280
 	defaultWGKeepalive    = 25
+	defaultWGWSDNS        = "1.1.1.1"
 )
 
 type Config struct {
@@ -507,10 +508,14 @@ func parseSingBoxWGWS(data []byte) (Config, bool, error) {
 	serverPublicKey := firstNonEmpty(peer.PublicKey, peer.PeerPublicKey, peer.ServerPublicKey, wireguard.PeerPublicKey, wireguard.ServerPublicKey)
 	presharedKey := firstNonEmpty(peer.PreSharedKey, peer.PresharedKey, wireguard.PreSharedKey, wireguard.PresharedKey)
 	allowedIPs := firstAny(peer.AllowedIPs, wireguard.AllowedIPs)
-	if allowedIPs == nil {
-		allowedIPs = []string{"0.0.0.0/0", "::/0"}
-	}
 	addresses := firstAny(wireguard.LocalAddress, wireguard.Address)
+	if allowedIPs == nil {
+		allowedIPs = defaultAllowedIPsForAddresses(addresses)
+	}
+	dns := strings.TrimSpace(wireguard.DNS)
+	if dns == "" {
+		dns = defaultWGWSDNS
+	}
 
 	native := rawConfig{
 		Protocol:  "wireguard",
@@ -526,7 +531,7 @@ func parseSingBoxWGWS(data []byte) (Config, bool, error) {
 			PresharedKey:        presharedKey,
 			Address:             addresses,
 			AllowedIPs:          allowedIPs,
-			DNS:                 strings.TrimSpace(wireguard.DNS),
+			DNS:                 dns,
 			MTU:                 mtu,
 			PersistentKeepalive: keepalive,
 		},
@@ -650,6 +655,40 @@ func firstAny(values ...any) any {
 		}
 	}
 	return nil
+}
+
+func defaultAllowedIPsForAddresses(addresses any) []string {
+	values := normalizeStringList(addresses)
+	hasIPv4 := false
+	hasIPv6 := false
+	for _, value := range values {
+		if prefix, err := netip.ParsePrefix(strings.TrimSpace(value)); err == nil {
+			if prefix.Addr().Is4() {
+				hasIPv4 = true
+			} else if prefix.Addr().Is6() {
+				hasIPv6 = true
+			}
+			continue
+		}
+		if addr, err := netip.ParseAddr(strings.TrimSpace(value)); err == nil {
+			if addr.Is4() {
+				hasIPv4 = true
+			} else if addr.Is6() {
+				hasIPv6 = true
+			}
+		}
+	}
+	if !hasIPv4 && !hasIPv6 {
+		return []string{"0.0.0.0/0", "::/0"}
+	}
+	out := make([]string, 0, 2)
+	if hasIPv4 {
+		out = append(out, "0.0.0.0/0")
+	}
+	if hasIPv6 {
+		out = append(out, "::/0")
+	}
+	return out
 }
 
 func firstInt(values ...*int) int {

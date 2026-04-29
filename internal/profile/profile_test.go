@@ -84,6 +84,9 @@ func TestParseWGWSAcceptsSingBoxWireGuardOutbound(t *testing.T) {
 	if config.MTU != 1280 || config.PersistentKeepalive != 25 {
 		t.Fatalf("unexpected mtu/keepalive: %d/%d", config.MTU, config.PersistentKeepalive)
 	}
+	if config.DNS != "1.1.1.1" {
+		t.Fatalf("unexpected default DNS: %s", config.DNS)
+	}
 }
 
 func TestParseWGWSAcceptsTracegateSingBoxAttachmentWithWSTunnelMetadata(t *testing.T) {
@@ -117,11 +120,41 @@ func TestParseWGWSAcceptsTracegateSingBoxAttachmentWithWSTunnelMetadata(t *testi
 	if config.LocalUDPListen != "127.0.0.1:51820" {
 		t.Fatalf("unexpected local UDP: %s", config.LocalUDPListen)
 	}
-	if got := config.AllowedIPs; len(got) != 2 || got[0] != "0.0.0.0/0" || got[1] != "::/0" {
+	if got := config.AllowedIPs; len(got) != 1 || got[0] != "0.0.0.0/0" {
 		t.Fatalf("unexpected default allowed IPs: %#v", got)
 	}
 	if config.PersistentKeepalive != 25 {
 		t.Fatalf("unexpected keepalive: %d", config.PersistentKeepalive)
+	}
+	if config.DNS != "1.1.1.1" {
+		t.Fatalf("unexpected default DNS: %s", config.DNS)
+	}
+}
+
+func TestParseWGWSDefaultsSingBoxAllowedIPsFromAddressFamilies(t *testing.T) {
+	raw := `{
+	  "outbounds": [
+	    {
+	      "type": "wireguard",
+	      "tag": "proxy",
+	      "server": "127.0.0.1",
+	      "server_port": 51820,
+	      "local_address": ["10.70.0.2/32", "fd00:70::2/128"],
+	      "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+	      "peer_public_key": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
+	      "pre_shared_key": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=",
+	      "mtu": 1280
+	    }
+	  ],
+	  "wstunnel": {"url": "wss://edge.example.com:443/cdn/ws"}
+	}`
+
+	config, err := ParseWGWS([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := config.AllowedIPs; len(got) != 2 || got[0] != "0.0.0.0/0" || got[1] != "::/0" {
+		t.Fatalf("unexpected dual-stack default allowed IPs: %#v", got)
 	}
 }
 

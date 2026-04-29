@@ -98,7 +98,11 @@ When importing a sing-box WireGuard attachment that points to a local WSTunnel
 UDP listener, paste the exact external WSTunnel target from the export message
 into the GUI profile form before saving. It must be a real value like
 `wss://your-gateway-domain:443/your-path`, not the placeholder word `host`.
-Native Big Red Button profiles already contain that URL.
+Native Big Red Button profiles already contain that URL. If a sing-box
+WireGuard attachment omits DNS, Big Red Button imports it with `1.1.1.1` so the
+Linux system-wide tunnel can route DNS through the WireGuard interface. If the
+attachment omits allowed IPs, Big Red Button derives IPv4/IPv6 defaults from
+the local WireGuard address families.
 
 On Linux the GUI uses `pkexec` for privileged actions, so desktop environments
 can show a graphical privilege prompt. The Linux package installs a polkit

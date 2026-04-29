@@ -100,6 +100,8 @@ In the GUI:
    exact external WSTunnel target from the export message into
    `WSTunnel target URL`. It must be a real `wss://...:443/...` URL, not the
    placeholder word `host`.
+   Attachments without DNS are imported with `1.1.1.1` for Linux system-wide
+   mode.
 3. Leave `Tunnel helper binary` as `/usr/lib/big-red-button/wstunnel` unless
    you want to test another helper build.
 4. Run `Preflight`.
