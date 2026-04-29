@@ -63,14 +63,14 @@ Runtime on Linux:
 - `systemd-resolved` / `resolvectl` when the profile contains DNS servers
 - `nftables` for isolated app tunnel fail-closed rules
 - `setpriv` from util-linux for launching isolated apps as the desktop user
-- `wstunnel` in `PATH`, or pass `-wstunnel-binary /path/to/wstunnel`
+- `wstunnel`; the Arch package bundles a pinned helper at
+  `/usr/lib/big-red-button/wstunnel`
 - root privileges or equivalent capabilities for real connect/disconnect
 
-On Arch Linux, `iproute2`, `systemd` and `wireguard-tools` are official
-packages. The alpha build deliberately does not bundle `wstunnel`: use the
-repository package if one is available for your setup, install it separately, or
-set an explicit helper path in the GUI / `-wstunnel-binary`. This keeps the
-launcher package small and avoids silently shipping a stale transport binary.
+On Arch Linux, pacman installs the official runtime dependencies declared by
+the package. The package also installs a pinned upstream `wstunnel` binary
+privately under `/usr/lib/big-red-button/`, so the GUI and CLI work without
+manually setting a helper path.
 
 ## Build
 
@@ -152,13 +152,25 @@ The package installs:
 - `/usr/bin/big-red-button`
 - `/usr/bin/big-red-button-gui`
 - `/usr/bin/big-red-buttond`
+- `/usr/bin/big-red-button-check`
+- `/usr/lib/big-red-button/wstunnel`
 - `/usr/lib/systemd/system/big-red-buttond.service`
 - `/usr/share/doc/big-red-button/linux-smoke.sh`
 - `/usr/share/applications/big-red-button.desktop`
 - `/usr/share/icons/hicolor/scalable/apps/big-red-button.svg`
 - `/usr/share/polkit-1/actions/com.myheartraces.bigredbutton.policy`
 - `/usr/share/licenses/big-red-button/LICENSE`
+- `/usr/share/licenses/big-red-button/LICENSE.wstunnel`
 - `/usr/share/doc/big-red-button/README.md`
+- `/usr/share/doc/big-red-button/README.wstunnel.md`
+
+The install hook reloads systemd, enables and starts `big-red-buttond.service`,
+updates desktop/icon caches when available, and runs a non-mutating install
+check. To validate a real profile after installation:
+
+```bash
+big-red-button-check --profile /path/to/profile.json
+```
 
 The PKGBUILD is in `packaging/arch/PKGBUILD`.
 
@@ -221,8 +233,7 @@ Repeatable Linux smoke run:
 
 ```bash
 /usr/share/doc/big-red-button/linux-smoke.sh \
-  --profile /path/to/profile.json \
-  --wstunnel-binary /usr/bin/wstunnel
+  --profile /path/to/profile.json
 ```
 
 The smoke script runs validation, preflight, dry-run planning and a diagnostics
@@ -230,7 +241,8 @@ bundle by default, including Linux isolated app plan/dry-run/preflight using
 `/usr/bin/true` as the selected app. Use `--isolated-command` and
 `--isolated-arg` to test another command. Add `--real-connect` or
 `--real-isolated` only on a test machine where changing networking state is
-acceptable.
+acceptable. On Arch, the bundled WSTunnel helper is used automatically; pass
+`--wstunnel-binary` only to test a different helper binary.
 
 ## Real Linux Connect
 
@@ -239,7 +251,6 @@ These commands change networking state. Run them only on the test machine.
 ```bash
 sudo big-red-button linux-connect \
   -yes \
-  -wstunnel-binary /usr/bin/wstunnel \
   /path/to/profile.json
 ```
 
@@ -284,7 +295,6 @@ Diagnostics bundle for remote troubleshooting:
 ```bash
 big-red-button diagnostics-bundle \
   -profile /path/to/profile.json \
-  -wstunnel-binary /usr/bin/wstunnel \
   -output big-red-button-diagnostics.tar.gz
 ```
 
@@ -321,7 +331,6 @@ Real run:
 ```bash
 sudo big-red-button linux-isolated-app \
   -yes \
-  -wstunnel-binary /usr/bin/wstunnel \
   /path/to/profile.json -- /usr/bin/curl https://example.com
 ```
 

@@ -582,6 +582,9 @@ func (a *app) isolatedRecover(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) statusPayload(ctx context.Context) statusResponse {
 	state := a.loadState()
+	if strings.TrimSpace(state.WSTunnelBinary) == "" {
+		state.WSTunnelBinary = defaultWSTunnelBinary()
+	}
 	runtimeSnapshot := status.FromStore(ctx, truntime.Store{Root: planner.DefaultRuntimeRoot})
 	var isolatedSessions []status.IsolatedSessionSnapshot
 	var statusError string
@@ -633,6 +636,15 @@ func (a *app) statusPayload(ctx context.Context) statusResponse {
 	response.Profile = &summary
 	response.ProfileOK = true
 	return response
+}
+
+func defaultWSTunnelBinary() string {
+	if desktopGOOS == "linux" {
+		if info, err := os.Stat(planner.BundledLinuxWSTunnelPath); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return planner.BundledLinuxWSTunnelPath
+		}
+	}
+	return ""
 }
 
 func (a *app) runCLI(ctx context.Context, action string, args []string) actionResponse {

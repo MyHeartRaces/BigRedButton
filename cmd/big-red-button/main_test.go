@@ -429,6 +429,30 @@ func TestShellQuote(t *testing.T) {
 	}
 }
 
+func TestEffectiveWSTunnelBinaryPrefersExplicitPath(t *testing.T) {
+	if got := effectiveWSTunnelBinary(" /custom/wstunnel "); got != "/custom/wstunnel" {
+		t.Fatalf("wstunnel binary = %q", got)
+	}
+}
+
+func TestEffectiveWSTunnelBinaryUsesBundledLinuxHelper(t *testing.T) {
+	oldGOOS := currentGOOS
+	oldBundledPath := bundledLinuxWSTunnelPath
+	defer func() {
+		currentGOOS = oldGOOS
+		bundledLinuxWSTunnelPath = oldBundledPath
+	}()
+	currentGOOS = "linux"
+	bundledLinuxWSTunnelPath = filepath.Join(t.TempDir(), "wstunnel")
+	if err := os.WriteFile(bundledLinuxWSTunnelPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := effectiveWSTunnelBinary(""); got != bundledLinuxWSTunnelPath {
+		t.Fatalf("wstunnel binary = %q", got)
+	}
+}
+
 func TestDiagnosticsCommand(t *testing.T) {
 	runtimeRoot := t.TempDir()
 	var stdout, stderr bytes.Buffer

@@ -18,16 +18,12 @@ directly from that checkout.
 
 ```bash
 sudo pacman -Syu
-sudo pacman -S --needed git base-devel go iproute2 wireguard-tools nftables systemd util-linux xdg-utils
+sudo pacman -S --needed git base-devel go
 ```
 
-`wstunnel` is an external runtime dependency in the alpha build. Install it
-separately or set an explicit path in the GUI / CLI:
-
-```bash
-which wstunnel
-wstunnel --version
-```
+The release package declares the runtime dependencies and pacman resolves them
+when installing the package. It also bundles a pinned upstream WSTunnel helper
+at `/usr/lib/big-red-button/wstunnel`.
 
 ## 2. Install Big Red Button
 
@@ -46,15 +42,21 @@ PKGVER=0.2.1 ./scripts/build-arch-package.sh
 sudo pacman -U dist/arch/makepkg/big-red-button-*.pkg.tar.zst
 ```
 
+The package install hook reloads systemd, enables and starts
+`big-red-buttond.service`, updates desktop/icon caches when available, and runs
+`big-red-button-check --install-check`.
+
 ## 3. Check Installed Binaries
 
 ```bash
 big-red-button version
 big-red-button-gui -addr 127.0.0.1:0 -no-open
 big-red-buttond -version
+/usr/lib/big-red-button/wstunnel --version
+big-red-button-check
 ```
 
-## 4. Start The Daemon
+## 4. Check The Daemon
 
 ```bash
 sudo systemctl daemon-reload
@@ -74,21 +76,17 @@ curl --unix-socket /run/big-red-button/launcher.sock \
 
 ```bash
 big-red-button validate-profile /path/to/profile.json
-big-red-button linux-preflight \
-  -discover-routes \
-  -require-pkexec \
-  -wstunnel-binary /path/to/wstunnel \
-  /path/to/profile.json
+big-red-button-check --profile /path/to/profile.json
 ```
 
-If `wstunnel` is in `PATH`, `-wstunnel-binary` can be omitted.
+The check command validates the profile and runs Linux preflight with the
+bundled WSTunnel helper.
 
 ## 6. Run Non-Mutating Smoke
 
 ```bash
 /usr/share/doc/big-red-button/linux-smoke.sh \
-  --profile /path/to/profile.json \
-  --wstunnel-binary /path/to/wstunnel
+  --profile /path/to/profile.json
 ```
 
 ## 7. Test The GUI
@@ -98,7 +96,8 @@ Launch **Big Red Button** from the application menu.
 In the GUI:
 
 1. Save Profile.
-2. Set `Tunnel helper binary` if `wstunnel` is not in `PATH`.
+2. Leave `Tunnel helper binary` as `/usr/lib/big-red-button/wstunnel` unless
+   you want to test another helper build.
 3. Run `Preflight`.
 4. Run `Connect`.
 5. Check status.
@@ -110,7 +109,6 @@ In the GUI:
 ```bash
 sudo big-red-button linux-connect \
   -yes \
-  -wstunnel-binary /path/to/wstunnel \
   /path/to/profile.json
 
 big-red-button status
@@ -126,7 +124,6 @@ Start with a harmless command:
 ```bash
 sudo big-red-button linux-isolated-app \
   -yes \
-  -wstunnel-binary /path/to/wstunnel \
   /path/to/profile.json -- /usr/bin/true
 
 big-red-button isolated-sessions
@@ -138,7 +135,6 @@ Then test a real network command:
 ```bash
 sudo big-red-button linux-isolated-app \
   -yes \
-  -wstunnel-binary /path/to/wstunnel \
   /path/to/profile.json -- /usr/bin/curl https://ifconfig.me
 ```
 
@@ -149,7 +145,6 @@ If anything fails:
 ```bash
 big-red-button diagnostics-bundle \
   -profile /path/to/profile.json \
-  -wstunnel-binary /path/to/wstunnel \
   -output brb-diagnostics.tar.gz
 
 sudo big-red-button linux-disconnect -yes

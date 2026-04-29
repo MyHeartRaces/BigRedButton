@@ -11,6 +11,7 @@ import (
 
 const (
 	DefaultWSTunnelBinary     = "wstunnel"
+	BundledLinuxWSTunnelPath  = "/usr/lib/big-red-button/wstunnel"
 	DefaultWireGuardInterface = "brb0"
 	DefaultRuntimeRoot        = "/run/big-red-button"
 )

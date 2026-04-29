@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate shell scripts
-        run: bash -n scripts/build-arch-package.sh scripts/build-macos-package.sh scripts/linux-smoke.sh
+        run: bash -n scripts/build-arch-package.sh scripts/build-macos-package.sh scripts/linux-smoke.sh packaging/linux/big-red-button-check.sh packaging/arch/big-red-button.install
 
   windows-11-arm64:
     name: Windows 11 arm64

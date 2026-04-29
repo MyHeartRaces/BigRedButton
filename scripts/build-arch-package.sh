@@ -35,6 +35,7 @@ find "${src_root}" -name ".DS_Store" -delete
 tar -czf "${src_tar}" -C "${tmp_root}" "${pkgname}-${pkgver}"
 
 cp "${repo_root}/packaging/arch/PKGBUILD" "${workdir}/PKGBUILD"
+cp "${repo_root}/packaging/arch/${pkgname}.install" "${workdir}/${pkgname}.install"
 sed -i "s/^pkgver=.*/pkgver=${pkgver}/" "${workdir}/PKGBUILD"
 
 (

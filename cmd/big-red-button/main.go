@@ -38,6 +38,20 @@ var lookupIPAddr = net.DefaultResolver.LookupIPAddr
 var executableLookPath = exec.LookPath
 var preflightCommandRunner platformlinux.CommandRunner = platformlinux.ExecRunner{}
 var monitorPIDExists = supervisor.PIDExists
+var bundledLinuxWSTunnelPath = planner.BundledLinuxWSTunnelPath
+
+func effectiveWSTunnelBinary(value string) string {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		return value
+	}
+	if currentGOOS == "linux" {
+		if info, err := os.Stat(bundledLinuxWSTunnelPath); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return bundledLinuxWSTunnelPath
+		}
+	}
+	return ""
+}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -512,8 +526,8 @@ func collectHostDiagnostics(wstunnelBinary string) diagnosticsHost {
 	}
 
 	binaries := []string{"ip", "wg"}
-	wstunnelBinary = strings.TrimSpace(wstunnelBinary)
-	if wstunnelBinary == "" {
+	wstunnelBinary = effectiveWSTunnelBinary(wstunnelBinary)
+	if strings.TrimSpace(wstunnelBinary) == "" {
 		wstunnelBinary = planner.DefaultWSTunnelBinary
 	}
 	binaries = append(binaries, wstunnelBinary, "resolvectl", "nft", "setpriv")
@@ -898,7 +912,7 @@ func linuxConnect(args []string, stdout io.Writer, stderr io.Writer) int {
 	executor, err := platformlinux.NewLifecycleExecutor(platformlinux.LifecycleExecutorOptions{
 		Plan:           plan,
 		Profile:        config,
-		WSTunnelBinary: *options.wstunnelBinary,
+		WSTunnelBinary: effectiveWSTunnelBinary(*options.wstunnelBinary),
 		RuntimeRoot:    plan.RuntimeRoot,
 		WireGuardIface: plan.WireGuardInterface,
 	})
@@ -1453,7 +1467,7 @@ func buildConnectPlan(config profile.Config, options connectFlagValues, endpoint
 		EndpointIPs:        endpointIPs,
 		DefaultGateway:     *options.defaultGateway,
 		DefaultInterface:   *options.defaultInterface,
-		WSTunnelBinary:     *options.wstunnelBinary,
+		WSTunnelBinary:     effectiveWSTunnelBinary(*options.wstunnelBinary),
 		WireGuardInterface: *options.wireguardInterface,
 		RuntimeRoot:        *options.runtimeRoot,
 	})
@@ -1637,7 +1651,7 @@ func isolatedAppOptionsFromFlags(flags isolatedAppFlagValues, appCommand []strin
 		AppID:              *flags.appID,
 		AppCommand:         appCommand,
 		DNS:                csvOption(*flags.dns),
-		WSTunnelBinary:     *flags.wstunnelBinary,
+		WSTunnelBinary:     effectiveWSTunnelBinary(*flags.wstunnelBinary),
 		WireGuardInterface: *flags.wireguardInterface,
 		RuntimeRoot:        *flags.runtimeRoot,
 		Namespace:          *flags.namespace,
